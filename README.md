@@ -1,12 +1,4 @@
-# Звезда — Платформа цифровых пополнений
-
-Современная веб-платформа для продажи цифровых товаров: пополнений игровых валют, ваучеров и подарочных карт.
-
-> 🎭 **Демо-режим включен по умолчанию** — проект работает с mock данными для удобной разработки фронтенда без backend. См. [DEMO_MODE_GUIDE.md](./DEMO_MODE_GUIDE.md) для подробностей.
-
-> ✅ **Production Ready (98%)** — проект готов к deployment. Все критические проблемы исправлены, code splitting внедрен, runtime валидация API добавлена. См. [PRODUCTION_READY_REPORT.md](./PRODUCTION_READY_REPORT.md) и [COMPREHENSIVE_ARCHITECTURE_AUDIT.md](./COMPREHENSIVE_ARCHITECTURE_AUDIT.md) для деталей.
-
-## 🚀 Особенности
+## Особенности
 
 - **Быстрое пополнение без регистрации** — покупка за 3 клика прямо на главной странице
 - **Три типа товаров**:
@@ -17,7 +9,7 @@
 - **Минимальный ввод данных** — только email и ID аккаунта
 - **Адаптивный дизайн** — оптимизирован для desktop (1440px) и mobile (390px)
 - **Админ-панель** — управление товарами, заказами и поддержкой
-- **Темная тема** — современный fintech/gaming дизайн
+- **Светлая тема** — современный fintech/gaming дизайн
 
 ## 🛠 Технологии
 
@@ -44,7 +36,7 @@
 - Bento-стиль для инструкций
 - Code splitting через React.lazy()
 
-## 📦 Установка и запуск
+## Установка и запуск
 
 ### Требования
 - Node.js 18+ 
@@ -70,7 +62,7 @@ npm run dev
 
 Приложение будет доступно по адресу `http://localhost:5173`
 
-**🎭 Демо-режим включен автоматически** — каталог заполнен mock товарами, можно тестировать все функции без backend.
+**Демо-режим включен автоматически** — каталог заполнен mock товарами, можно тестировать все функции без backend.
 
 **Вход в админ-панель:**
 - Email: `admin@zvezda.ru`
@@ -156,11 +148,11 @@ src/
 └── main.tsx                       # Точка входа
 ```
 
-## 🎨 Дизайн-система
+## Дизайн-система
 
 ### Цветовая палитра
 - **Primary**: `#074528` (темно-зеленый)
-- **Background**: Темная тема по умолчанию
+- **Background**: Светлая тема по умолчанию
 - **Accent**: Оттенки primary для hover-эффектов
 - **Success**: `#16a75a` (зеленый для успешных операций)
 
@@ -175,7 +167,7 @@ src/
 - Hover/focus/disabled состояния
 - Адаптивные отступы
 
-## 🔑 Основные страницы
+## Основные страницы
 
 ### Публичная часть
 
@@ -239,7 +231,7 @@ src/
 - Управление тикетами
 - Контакты поддержки
 
-## 🔌 Интеграция с Backend
+## Интеграция с Backend
 
 Проект готов к интеграции с backend API. Все сервисы автоматически переключаются между mock и real API на основе конфигурации.
 
@@ -256,8 +248,6 @@ src/
 VITE_USE_MOCK_DATA=false
 VITE_API_URL=https://api.zvezda.ru
 ```
-
-Подробнее: [DEMO_MODE_GUIDE.md](./DEMO_MODE_GUIDE.md)
 
 ### API Endpoints (ожидаемые)
 
@@ -321,7 +311,7 @@ VITE_API_URL=https://api.zvezda.ru    # URL backend API
 VITE_USE_MOCK_DATA=false              # Отключить демо-режим
 ```
 
-## 🎯 Ключевые функции
+## Ключевые функции
 
 ### Быстрое пополнение
 - Выбор товара из популярных
@@ -373,7 +363,7 @@ VITE_USE_MOCK_DATA=false              # Отключить демо-режим
 - ⚠️ Добавить мониторинг (Sentry)
 - ⚠️ Централизованный error handler (опционально)
 
-Подробнее: [PRODUCTION_READY_REPORT.md](./PRODUCTION_READY_REPORT.md) | [COMPREHENSIVE_ARCHITECTURE_AUDIT.md](./COMPREHENSIVE_ARCHITECTURE_AUDIT.md)
+Подробнее:[COMPREHENSIVE_ARCHITECTURE_AUDIT.md](./COMPREHENSIVE_ARCHITECTURE_AUDIT.md)
 
 ### Готовность к разработке
 
@@ -403,13 +393,7 @@ npm run test:coverage
 **Планы:** Расширение до 60%+ (компоненты, интеграционные тесты)
 
 ## 📚 Документация
-
-- [DEMO_MODE_GUIDE.md](./DEMO_MODE_GUIDE.md) — руководство по демо-режиму
-- [DEMO_MODE_QUICK_START.md](./DEMO_MODE_QUICK_START.md) — быстрый старт
-- [PRODUCTION_READY_REPORT.md](./PRODUCTION_READY_REPORT.md) — отчет о готовности к production
-- [COMPREHENSIVE_ARCHITECTURE_AUDIT.md](./COMPREHENSIVE_ARCHITECTURE_AUDIT.md) — полный архитектурный аудит
-- [HOW_TO_USE.md](./HOW_TO_USE.md) — руководство пользователя
-- [TESTING_CHECKLIST.md](./TESTING_CHECKLIST.md) — чек-лист тестирования
+- [COMPREHENSIVE_ARCHITECTURE_AUDIT.md](./COMPREHENSIVE_ARCHITECTURE_AUDIT.md) 
 
 ## 🔒 Безопасность
 
@@ -420,22 +404,3 @@ npm run test:coverage
 - ✅ Защищенные маршруты (ProtectedRoute)
 - ✅ Error Boundary для обработки ошибок
 - ✅ Демо-режим отключен в production
-
-## 📝 Лицензия
-
-Проект создан для платформы "Звезда". Все права защищены.
-
-## 🔗 Ссылки
-
-- [Figma Design](https://www.figma.com/design/jHW7egRXYZsErr4rU3c0mi/Digital-Top-Up-Platform-Prototype) — оригинальный дизайн-прототип
-
-## 👥 Контакты
-
-- Email: support@zvezda.ru
-- Telegram: @zvezda_support
-
----
-
-**Версия**: 1.3.0  
-**Статус**: ✅ Production Ready (98%)  
-**Последнее обновление**: 23 января 2026
