@@ -6,13 +6,16 @@
 
 import { logger } from '@/app/utils/logger';
 
-interface CheckoutData {
+export interface CheckoutData {
   productId: string;
   denominationId: string;
   email: string;
   accountId?: string;
   region?: string;
   server?: string;
+  /** При своей сумме: сумма пополнения и цена в ₽ */
+  customAmount?: number;
+  customPrice?: number;
 }
 
 const STORAGE_KEY = 'checkout_data';
@@ -50,7 +53,12 @@ export function getCheckoutData(): CheckoutData | null {
     }
 
     // Validate required fields
-    if (!data.productId || !data.denominationId || !data.email) {
+    if (!data.productId || !data.email) {
+      clearCheckoutData();
+      return null;
+    }
+    const isCustom = data.denominationId === 'custom';
+    if (!data.denominationId || (isCustom && (typeof data.customAmount !== 'number' || typeof data.customPrice !== 'number'))) {
       clearCheckoutData();
       return null;
     }
@@ -63,6 +71,8 @@ export function getCheckoutData(): CheckoutData | null {
       accountId: data.accountId ? String(data.accountId) : undefined,
       region: data.region ? String(data.region) : undefined,
       server: data.server ? String(data.server) : undefined,
+      customAmount: isCustom ? Number(data.customAmount) : undefined,
+      customPrice: isCustom ? Number(data.customPrice) : undefined,
     };
   } catch (error) {
     logger.error('Failed to retrieve checkout data', error);

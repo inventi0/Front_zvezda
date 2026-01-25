@@ -11,9 +11,11 @@ import { Input } from '@/app/components/ui/input';
 import { Search, Mail, MessageCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/app/components/ui/button';
+import { useSupportChat } from '@/app/contexts/SupportChatContext';
 
 export default function FAQPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const { openChat } = useSupportChat();
 
   const faqs = [
     {
@@ -170,9 +172,13 @@ export default function FAQPage() {
               <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">
                 Свяжитесь с нашей службой поддержки, и мы поможем вам
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center flex-wrap">
+                <Button onClick={openChat}>
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  Открыть чат
+                </Button>
                 <a href="mailto:support@zvezda.ru">
-                  <Button>
+                  <Button variant="outline">
                     <Mail className="mr-2 h-4 w-4" />
                     support@zvezda.ru
                   </Button>

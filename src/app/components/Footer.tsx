@@ -4,9 +4,9 @@ import logoImage from '@/app/assets/icons/Лого-Звезда.svg?url';
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border bg-card mt-auto">
+    <footer className="relative z-10 border-t border-border bg-card mt-auto">
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 md:py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8">
           {/* About */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -20,33 +20,6 @@ export default function Footer() {
             <p className="text-sm text-muted-foreground">
               Быстрое и безопасное пополнение игровых валют, подарочных карт и подписок.
             </p>
-          </div>
-
-          {/* Products */}
-          <div>
-            <h4 className="font-semibold mb-4">Товары</h4>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <Link to="/catalog/games" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Игры
-                </Link>
-              </li>
-              <li>
-                <Link to="/catalog/subscriptions" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Подписки
-                </Link>
-              </li>
-              <li>
-                <Link to="/catalog/wallet" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Подарочные карты
-                </Link>
-              </li>
-              <li>
-                <Link to="/catalog/services" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Сервисы
-                </Link>
-              </li>
-            </ul>
           </div>
 
           {/* Support */}

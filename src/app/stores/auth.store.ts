@@ -14,6 +14,7 @@ interface AuthState {
   tokens: AuthTokens | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isSupport: boolean;
   isLoading: boolean;
   error: string | null;
 
@@ -67,6 +68,7 @@ export const useAuthStore = create<AuthState>()(
       tokens: null,
       isAuthenticated: false,
       isAdmin: false,
+      isSupport: false,
       isLoading: false,
       error: null,
 
@@ -80,6 +82,7 @@ export const useAuthStore = create<AuthState>()(
             tokens: response.tokens,
             isAuthenticated: true,
             isAdmin: response.user.role === 'admin',
+            isSupport: response.user.role === 'support',
             isLoading: false,
           });
         } catch (error) {
@@ -99,6 +102,7 @@ export const useAuthStore = create<AuthState>()(
             tokens: response.tokens,
             isAuthenticated: true,
             isAdmin: response.user.role === 'admin',
+            isSupport: response.user.role === 'support',
             isLoading: false,
           });
         } catch (error) {
@@ -120,6 +124,7 @@ export const useAuthStore = create<AuthState>()(
             tokens: null,
             isAuthenticated: false,
             isAdmin: false,
+            isSupport: false,
             error: null,
           });
         }
@@ -137,13 +142,13 @@ export const useAuthStore = create<AuthState>()(
           set({ tokens: response.tokens });
         } catch (error) {
           logger.error('Token refresh failed', error);
-          // If refresh fails, logout user
           secureStorage.removeTokens();
           set({
             user: null,
             tokens: null,
             isAuthenticated: false,
             isAdmin: false,
+            isSupport: false,
           });
           throw error;
         }
@@ -152,7 +157,7 @@ export const useAuthStore = create<AuthState>()(
       checkAuth: async () => {
         const tokens = secureStorage.getTokens();
         if (!tokens) {
-          set({ isAuthenticated: false, user: null, isAdmin: false });
+          set({ isAuthenticated: false, user: null, isAdmin: false, isSupport: false });
           return;
         }
 
@@ -164,6 +169,7 @@ export const useAuthStore = create<AuthState>()(
             tokens,
             isAuthenticated: true,
             isAdmin: user.role === 'admin',
+            isSupport: user.role === 'support',
             isLoading: false,
           });
         } catch (error) {
@@ -174,6 +180,7 @@ export const useAuthStore = create<AuthState>()(
             tokens: null,
             isAuthenticated: false,
             isAdmin: false,
+            isSupport: false,
             isLoading: false,
           });
         }

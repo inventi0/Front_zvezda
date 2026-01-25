@@ -76,7 +76,7 @@ const createSeedTickets = (orders: Awaited<ReturnType<typeof adminOrdersService.
 
 export default function AdminSupport() {
   const [orders, setOrders] = useState<Awaited<ReturnType<typeof adminOrdersService.getOrders>>['orders']>([]);
-  
+
   useEffect(() => {
     const fetchOrders = async () => {
       try {
@@ -93,7 +93,7 @@ export default function AdminSupport() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  
+
   useEffect(() => {
     const newTickets = createSeedTickets(orders);
     setTickets(newTickets);

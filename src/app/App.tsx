@@ -1,14 +1,16 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useRef } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/app/components/ErrorBoundary';
 import { ProtectedRoute } from '@/app/components/ProtectedRoute';
+import { SupportChatProvider } from '@/app/contexts/SupportChatContext';
+import { SupportChatWidget } from '@/app/components/SupportChatWidget';
+import { useAuth } from '@/app/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
 // Lazy load pages for code splitting
 // Public Pages
 const HomePage = lazy(() => import('@/app/pages/Home'));
-const CatalogPage = lazy(() => import('@/app/pages/Catalog'));
 const ProductPage = lazy(() => import('@/app/pages/Product'));
 const CheckoutPage = lazy(() => import('@/app/pages/Checkout'));
 const PaymentProcessingPage = lazy(() => import('@/app/pages/PaymentProcessing'));
@@ -33,17 +35,22 @@ const LoadingFallback = () => (
   </div>
 );
 
-export default function App() {
+function AdminEntryRedirect() {
+  const { isSupport } = useAuth();
+  return <Navigate to={isSupport ? '/admin/support' : '/admin/dashboard'} replace />;
+}
+
+function AppContent() {
+  const location = useLocation();
+  const openChatRef = useRef<(() => void) | null>(null);
+  const isAdmin = location.pathname.startsWith('/admin');
+
   return (
-    <BrowserRouter>
-      <ErrorBoundary>
-        <Suspense fallback={<LoadingFallback />}>
-          <div className="min-h-screen bg-background text-foreground">
-            <Routes>
+    <SupportChatProvider openChatRef={openChatRef}>
+      <div className="min-h-screen bg-background text-foreground">
+        <Routes>
           {/* Public Routes */}
           <Route path="/" element={<HomePage />} />
-          <Route path="/catalog" element={<CatalogPage />} />
-          <Route path="/catalog/:category" element={<CatalogPage />} />
           <Route path="/product/:slug" element={<ProductPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/payment-processing" element={<PaymentProcessingPage />} />
@@ -54,7 +61,14 @@ export default function App() {
           <Route path="/account" element={<AccountPage />} />
 
           {/* Admin Routes - Protected */}
-          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requireAdminOrSupport>
+                <AdminEntryRedirect />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/admin/dashboard"
             element={
@@ -98,17 +112,27 @@ export default function App() {
           <Route
             path="/admin/support"
             element={
-              <ProtectedRoute requireAdmin>
+              <ProtectedRoute requireAdminOrSupport>
                 <AdminSupport />
               </ProtectedRoute>
             }
           />
-
           {/* 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-            <Toaster position="top-right" richColors />
-          </div>
+        </Routes>
+        <Toaster position="top-right" richColors />
+        {!isAdmin && <SupportChatWidget openChatRef={openChatRef} />}
+      </div>
+    </SupportChatProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingFallback />}>
+          <AppContent />
         </Suspense>
       </ErrorBoundary>
     </BrowserRouter>

@@ -1,17 +1,28 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
-import { Package, MessageCircle } from 'lucide-react';
-import type { Ticket } from '@/app/types';
+import { Package, MessageCircle, User, LogOut } from 'lucide-react';
+import type { Order, Ticket } from '@/app/types';
 import { useState, useEffect, useCallback } from 'react';
 import { ordersService } from '@/app/services';
 import { logger } from '@/app/utils/logger';
+import { useAuth } from '@/app/hooks/useAuth';
+import { useSupportChat } from '@/app/contexts/SupportChatContext';
+
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Админ',
+  support: 'Поддержка',
+  user: 'Покупатель',
+};
 
 export default function AccountPage() {
-  const [userOrders, setUserOrders] = useState<Awaited<ReturnType<typeof ordersService.getOrder>>[]>([]);
+  const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth();
+  const { openChat } = useSupportChat();
+  const [userOrders, setUserOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // В реальной системе тикеты будут приходить из API и фильтроваться по пользователю.
@@ -34,8 +45,36 @@ export default function AccountPage() {
   }, []);
 
   useEffect(() => {
-    fetchUserOrders();
-  }, [fetchUserOrders]);
+    if (isAuthenticated) fetchUserOrders();
+    else setLoading(false);
+  }, [isAuthenticated, fetchUserOrders]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1">
+          <div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 md:py-12">
+            <Card>
+              <CardContent className="p-12 text-center">
+                <User className="h-14 w-14 mx-auto mb-4 text-muted-foreground" />
+                <h2 className="text-xl font-semibold mb-2">Вы не вошли в аккаунт</h2>
+                <p className="text-muted-foreground mb-6">
+                  Войдите, чтобы видеть заказы и управлять профилем.
+                </p>
+                <Link to="/auth">
+                  <Button className="gap-2">
+                    Войти
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -43,6 +82,41 @@ export default function AccountPage() {
       
       <main className="flex-1">
         <div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 md:py-12 space-y-6 sm:space-y-8 md:space-y-10">
+          {/* Профиль: кто вошёл + Выйти */}
+          {user && (
+            <Card>
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <User className="h-5 w-5 text-muted-foreground" />
+                    </span>
+                    <div>
+                      <p className="font-semibold">{user.name || user.email}</p>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                      <Badge variant="secondary" className="mt-1">
+                        {ROLE_LABEL[user.role] ?? user.role}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      className="gap-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      onClick={async () => {
+                        await logout();
+                        navigate('/');
+                      }}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Выйти
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">Мои заказы</h1>
             <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
@@ -118,7 +192,7 @@ export default function AccountPage() {
                 <p className="text-muted-foreground mb-6">
                   Начните с выбора товара в каталоге
                 </p>
-                <Link to="/catalog">
+                <Link to="/#catalog">
                   <Button>Перейти в каталог</Button>
                 </Link>
               </CardContent>
@@ -132,9 +206,15 @@ export default function AccountPage() {
             </div>
             {tickets.length === 0 ? (
               <Card>
-                <CardContent className="p-6 text-sm text-muted-foreground">
-                  У вас пока нет обращений в поддержку. Если возникнет проблема с заказом,
-                  вы можете создать тикет прямо из карточки заказа или со страницы статуса.
+                <CardContent className="p-6 space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    У вас пока нет обращений в поддержку. Если возникнет проблема с заказом,
+                    создайте тикет из карточки заказа или со страницы статуса — или напишите в чат.
+                  </p>
+                  <Button variant="outline" onClick={openChat}>
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Написать в чат
+                  </Button>
                 </CardContent>
               </Card>
             ) : (

@@ -53,7 +53,6 @@ export default function AdminOrders() {
 
   const filteredOrders = useMemo(() => {
     if (!searchQuery) return orders;
-
     const query = searchQuery.toLowerCase();
     return orders.filter(
       o =>
@@ -79,7 +78,6 @@ export default function AdminOrders() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Filters */}
         <Card className="mb-6">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
@@ -93,7 +91,7 @@ export default function AdminOrders() {
                   className="pl-10"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | 'all')}>
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue />
@@ -110,7 +108,6 @@ export default function AdminOrders() {
           </CardContent>
         </Card>
 
-        {/* Orders Table */}
         <Card>
           <CardHeader>
             <CardTitle>Заказы ({filteredOrders.length})</CardTitle>
@@ -148,32 +145,32 @@ export default function AdminOrders() {
                       </TableRow>
                     ) : (
                       filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-mono text-sm">{order.id}</TableCell>
-                      <TableCell className="text-sm">
-                        {new Date(order.createdAt).toLocaleDateString('ru-RU')}
-                      </TableCell>
-                      <TableCell>{order.productName}</TableCell>
-                      <TableCell className="text-sm">{order.email}</TableCell>
-                      <TableCell className="font-mono">{order.total} ₽</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          order.status === 'success' ? 'default' :
-                          order.status === 'pending' ? 'secondary' :
-                          order.status === 'failed' ? 'destructive' :
-                          'outline'
-                        }>
-                          {order.statusText}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Link to={`/admin/orders/${order.id}`}>
-                          <Button variant="ghost" size="sm">
-                            Детали
-                          </Button>
-                        </Link>
-                      </TableCell>
-                      </TableRow>
+                        <TableRow key={order.id}>
+                          <TableCell className="font-mono text-sm">{order.id}</TableCell>
+                          <TableCell className="text-sm">
+                            {new Date(order.createdAt).toLocaleDateString('ru-RU')}
+                          </TableCell>
+                          <TableCell>{order.productName}</TableCell>
+                          <TableCell className="text-sm">{order.email}</TableCell>
+                          <TableCell className="font-mono">{order.total} ₽</TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              order.status === 'success' ? 'default' :
+                              order.status === 'pending' ? 'secondary' :
+                              order.status === 'failed' ? 'destructive' :
+                              'outline'
+                            }>
+                              {order.statusText}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Link to={`/admin/orders/${order.id}`}>
+                              <Button variant="ghost" size="sm">
+                                Детали
+                              </Button>
+                            </Link>
+                          </TableCell>
+                        </TableRow>
                       ))
                     )}
                   </TableBody>

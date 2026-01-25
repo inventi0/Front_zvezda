@@ -17,17 +17,20 @@ export const isMockMode = (): boolean => {
   return config.enableMockData;
 };
 
+/** Resolve product by id (platform catalog only). */
+export function getProductByIdUnified(id: string): Product | undefined {
+  return getProductById(id);
+}
+
 /**
  * Mock Products Service
  */
 export const mockProductsService = {
   async getProducts(params?: GetProductsRequest): Promise<Product[]> {
-    // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    let products = [...mockProducts];
+    let products: Product[] = [...mockProducts];
 
-    // Apply filters
     if (params?.category) {
       products = products.filter(p => p.category === params.category);
     }
@@ -36,9 +39,9 @@ export const mockProductsService = {
     }
     if (params?.search) {
       const searchLower = params.search.toLowerCase();
-      products = products.filter(p => 
+      products = products.filter(p =>
         p.name.toLowerCase().includes(searchLower) ||
-        p.description.toLowerCase().includes(searchLower)
+        (p.description ?? '').toLowerCase().includes(searchLower)
       );
     }
 
@@ -48,18 +51,14 @@ export const mockProductsService = {
   async getProductBySlug(slug: string): Promise<Product> {
     await new Promise(resolve => setTimeout(resolve, 200));
     const product = getProductBySlug(slug);
-    if (!product) {
-      throw new Error(`Product with slug "${slug}" not found`);
-    }
+    if (!product) throw new Error(`Product with slug "${slug}" not found`);
     return product;
   },
 
   async getProductById(id: string): Promise<Product> {
     await new Promise(resolve => setTimeout(resolve, 200));
     const product = getProductById(id);
-    if (!product) {
-      throw new Error(`Product with id "${id}" not found`);
-    }
+    if (!product) throw new Error(`Product with id "${id}" not found`);
     return product;
   },
 };
@@ -72,30 +71,28 @@ export const mockOrdersService = {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const product = getProductById(data.productId);
-    if (!product) {
-      throw new Error(`Product with id "${data.productId}" not found`);
+    if (!product) throw new Error(`Product with id "${data.productId}" not found`);
+
+    let amount: number;
+    let basePrice: number;
+    if (data.denominationId === 'custom' && typeof data.customAmount === 'number' && typeof data.customPrice === 'number') {
+      amount = data.customAmount;
+      basePrice = data.customPrice;
+    } else {
+      const denomination = product.denominations.find(d => d.id === data.denominationId);
+      if (!denomination) throw new Error(`Denomination with id "${data.denominationId}" not found`);
+      amount = denomination.amount;
+      basePrice = denomination.price;
     }
 
-    const denomination = product.denominations.find(d => d.id === data.denominationId);
-    if (!denomination) {
-      throw new Error(`Denomination with id "${data.denominationId}" not found`);
-    }
-
-    // Calculate totals using centralized commission logic
-    const basePrice = denomination.price;
-    const { commission, total } = calculateOrderTotal(
-      basePrice,
-      config.gatewayCommissionPercent,
-    );
-
-    // Generate order ID
+    const { commission, total } = calculateOrderTotal(basePrice, config.gatewayCommissionPercent);
     const orderId = `ORD-2026-${String(mockOrders.length + 1).padStart(6, '0')}`;
 
     const order: Order = {
       id: orderId,
       productId: data.productId,
       productName: product.name,
-      amount: denomination.amount,
+      amount,
       price: basePrice,
       commission,
       total,
@@ -108,16 +105,9 @@ export const mockOrdersService = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       paymentMethod: data.paymentMethod,
-      timeline: [
-        {
-          timestamp: new Date().toISOString(),
-          status: 'created',
-          message: 'Заказ создан',
-        },
-      ],
+      timeline: [{ timestamp: new Date().toISOString(), status: 'created', message: 'Заказ создан' }],
     };
 
-    // Store in mock orders (in real app, this would be done by backend)
     mockOrders.push(order);
 
     return {
@@ -130,35 +120,27 @@ export const mockOrdersService = {
   async getOrder(orderId: string): Promise<Order> {
     await new Promise(resolve => setTimeout(resolve, 200));
     const order = getOrderById(orderId);
-    if (!order) {
-      throw new Error(`Order with id "${orderId}" not found`);
-    }
+    if (!order) throw new Error(`Order with id "${orderId}" not found`);
     return order;
   },
 
-  /**
-   * Get user orders (for Account page)
-   * In mock mode, returns orders filtered by current user email
-   */
   async getUserOrders(): Promise<Order[]> {
     await new Promise(resolve => setTimeout(resolve, 300));
-    
-    // In mock mode, get current user from localStorage
+
+    let userEmail: string | undefined;
     try {
-      const storedUser = localStorage.getItem('auth_user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser) as { email?: string };
-        if (user.email) {
-          // Return orders for this user
-          return mockOrders.filter(o => o.email === user.email);
-        }
+      const authRaw = localStorage.getItem('auth-storage');
+      if (authRaw) {
+        const parsed = JSON.parse(authRaw) as { state?: { user?: { email?: string } }; user?: { email?: string } };
+        userEmail = parsed?.state?.user?.email ?? parsed?.user?.email;
       }
     } catch {
-      // If can't get user, return empty array
+      /* ignore */
     }
-    
-    // Default: return all orders (for demo purposes)
-    return [...mockOrders];
+
+    const list = userEmail ? mockOrders.filter((o) => o.email === userEmail) : [...mockOrders];
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list;
   },
 };
 
@@ -203,6 +185,13 @@ const mockUsers: User[] = [
     role: 'user',
     createdAt: new Date().toISOString(),
   },
+  {
+    id: '3',
+    email: 'support@zvezda.ru',
+    name: 'Поддержка',
+    role: 'support',
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 export const mockAuthService = {
@@ -222,6 +211,16 @@ export const mockAuthService = {
 
     if (data.email === 'user@example.com' && data.password === 'user123') {
       const user = mockUsers[1];
+      const tokens: AuthTokens = {
+        accessToken: `mock-access-token-${user.id}`,
+        refreshToken: `mock-refresh-token-${user.id}`,
+        expiresIn: 3600,
+      };
+      return { user, tokens };
+    }
+
+    if (data.email === 'support@zvezda.ru' && data.password === 'support123') {
+      const user = mockUsers[2];
       const tokens: AuthTokens = {
         accessToken: `mock-access-token-${user.id}`,
         refreshToken: `mock-refresh-token-${user.id}`,
@@ -289,8 +288,19 @@ export const mockAuthService = {
 
   async getCurrentUser(): Promise<User> {
     await new Promise(resolve => setTimeout(resolve, 200));
-    // In mock mode, return admin user
-    return mockUsers[0];
+    try {
+      const raw = localStorage.getItem('auth_tokens');
+      if (raw) {
+        const parsed = JSON.parse(raw) as { accessToken?: string };
+        const accessToken = parsed?.accessToken;
+        const id = accessToken?.replace(/^mock-access-token-/, '');
+        const user = id ? mockUsers.find((u) => u.id === id) ?? null : null;
+        if (user) return user;
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+    throw new Error('Сессия не найдена. Войдите снова.');
   },
 };
 

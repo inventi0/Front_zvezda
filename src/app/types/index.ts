@@ -11,6 +11,22 @@ export type ProductType = 'top-up' | 'voucher' | 'gift-card';
 export type ProductCategory = 'games' | 'wallet' | 'services' | 'subscriptions';
 export type DeliverySpeed = 'instant' | 'fast' | 'manual';
 
+/** Category layer: Game/Platform (e.g. Steam, Fortnite). Optional; existing products work without it. */
+export interface GameCategory {
+  id: string;
+  slug: string;
+  title: string;
+  icon: string;
+}
+
+/** Product type entity (Top-Up, Voucher, Gift Card) with id/slug/title/icon. Optional layer. */
+export interface ProductTypeEntity {
+  id: string;
+  slug: string;
+  title: string;
+  icon: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -29,6 +45,16 @@ export interface Product {
   popular?: boolean;
   features?: string[];
   faq?: { question: string; answer: string }[];
+  /** Optional: link to GameCategory. New products may use it. */
+  gameCategoryId?: string;
+  /** Optional: link to ProductTypeEntity. New products may use it. */
+  productTypeId?: string;
+  /** Optional: aggregate rating 0–5. Trust layer. */
+  rating?: number;
+  /** Optional: number of reviews. Trust layer. */
+  reviewsCount?: number;
+  /** Optional: seller id when product is from seller catalog. */
+  sellerId?: string;
 }
 
 export interface Denomination {
@@ -45,6 +71,10 @@ export interface Denomination {
 // ============================================================================
 
 export type OrderStatus = 'pending' | 'success' | 'failed' | 'manual_review';
+
+/** Escrow sub-state for order. Frontend-ready for future backend. */
+export type EscrowStatus = 'PAID' | 'IN_ESCROW' | 'DELIVERED' | 'DISPUTE' | 'RELEASED';
+
 export type PaymentMethod = 'card' | 'sbp';
 
 export interface Order {
@@ -68,6 +98,12 @@ export interface Order {
   timeline: OrderTimelineEvent[];
   failureReason?: string;
   provider?: string;
+  /** Optional: escrow state. Shown on OrderStatus when present. */
+  escrowStatus?: EscrowStatus;
+  /** Optional: seller id when order is from seller product. Shown in admin order detail. */
+  sellerId?: string;
+  /** Optional: admin note (e.g. from status update). */
+  note?: string;
 }
 
 export interface OrderTimelineEvent {
@@ -157,14 +193,62 @@ export interface FormErrors {
 }
 
 // ============================================================================
+// TRUST / SELLER TYPES
+// ============================================================================
+
+export interface Seller {
+  id: string;
+  nickname: string;
+  avatar: string;
+  rating: number;
+  reviewsCount: number;
+  salesCount: number;
+}
+
+export interface Review {
+  id: string;
+  /** Product this review is for. */
+  productId: string;
+  /** Optional: seller for seller-level reviews. */
+  sellerId?: string;
+  /** Optional: order Id when review left after purchase. */
+  orderId?: string;
+  rating: number;
+  text: string;
+  createdAt: string;
+}
+
+export interface PlatformStats {
+  totalOrders: number;
+  successRate: number;
+  averageDeliveryMinutes: number;
+  activeSellers: number;
+  totalReviews: number;
+  averageRating: number;
+}
+
+// ============================================================================
 // AUTH TYPES
 // ============================================================================
+
+export type UserRole = 'user' | 'admin' | 'seller' | 'support';
 
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'user' | 'admin';
+  role: UserRole;
+  createdAt: string;
+}
+
+/** Заявка на продавца (онбординг). */
+export interface SellerApplication {
+  id: string;
+  email: string;
+  name: string;
+  description?: string;
+  acceptedRules: boolean;
+  status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }
 

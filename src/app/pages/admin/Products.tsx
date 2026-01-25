@@ -32,46 +32,30 @@ export default function AdminProducts() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'all'>('all');
 
-  // Debounce search query
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 300);
-
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const filteredProducts = useMemo(() => {
     let products = [...allProducts];
-
-    if (categoryFilter !== 'all') {
-      products = products.filter(p => p.category === categoryFilter);
-    }
-
+    if (categoryFilter !== 'all') products = products.filter(p => p.category === categoryFilter);
     if (debouncedSearchQuery) {
-      const query = debouncedSearchQuery.toLowerCase();
-      products = products.filter(p =>
-        p.name.toLowerCase().includes(query) ||
-        p.description.toLowerCase().includes(query)
+      const q = debouncedSearchQuery.toLowerCase();
+      products = products.filter(
+        p => p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)
       );
     }
-
     return products;
   }, [allProducts, categoryFilter, debouncedSearchQuery]);
 
   const handleTogglePopular = useCallback((productId: string) => {
-    setPopularFlags(prev => ({
-      ...prev,
-      [productId]: !prev[productId],
-    }));
+    setPopularFlags(prev => ({ ...prev, [productId]: !prev[productId] }));
     toast.success('Статус товара обновлен');
   }, []);
 
-  const getProductPopularStatus = (product: typeof allProducts[0]) => {
-    return popularFlags[product.id] !== undefined 
-      ? popularFlags[product.id] 
-      : product.popular || false;
-  };
+  const getProductPopularStatus = (product: (typeof allProducts)[0]) =>
+    popularFlags[product.id] !== undefined ? popularFlags[product.id] : (product.popular ?? false);
 
   return (
     <div className="min-h-screen bg-background">
@@ -97,7 +81,6 @@ export default function AdminProducts() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Filters */}
         <Card className="mb-6">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
@@ -111,7 +94,7 @@ export default function AdminProducts() {
                   className="pl-10"
                 />
               </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as ProductCategory | 'all')}>
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -127,7 +110,6 @@ export default function AdminProducts() {
           </CardContent>
         </Card>
 
-        {/* Products Table */}
         <Card>
           <CardHeader>
             <CardTitle>Товары ({filteredProducts.length})</CardTitle>
@@ -168,8 +150,8 @@ export default function AdminProducts() {
                           <TableRow key={product.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
-                                <img 
-                                  src={getProductLogo(product.slug)} 
+                                <img
+                                  src={getProductLogo(product.slug)}
                                   alt={`${product.name} logo`}
                                   className="w-8 h-8 object-contain"
                                 />
@@ -184,20 +166,18 @@ export default function AdminProducts() {
                             <TableCell>
                               <Badge variant="outline">
                                 {product.category === 'games' ? 'Игры' :
-                                 product.category === 'subscriptions' ? 'Подписки' :
-                                 product.category === 'wallet' ? 'Карты' :
-                                 'Сервисы'}
+                                  product.category === 'subscriptions' ? 'Подписки' :
+                                    product.category === 'wallet' ? 'Карты' : 'Сервисы'}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               <Badge variant="secondary">
                                 {product.type === 'top-up' ? 'Пополнение' :
-                                 product.type === 'voucher' ? 'Ваучер' :
-                                 'Gift Card'}
+                                  product.type === 'voucher' ? 'Ваучер' : 'Gift Card'}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-sm">
-                              от {product.denominations[0]?.price || 0} ₽
+                              от {product.denominations[0]?.price ?? 0} ₽
                             </TableCell>
                             <TableCell>
                               <Button
@@ -223,7 +203,6 @@ export default function AdminProducts() {
           </CardContent>
         </Card>
       </div>
-
     </div>
   );
 }

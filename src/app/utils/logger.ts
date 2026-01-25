@@ -40,6 +40,7 @@ class Logger {
    */
   info(message: string, context?: LogContext): void {
     if (isDev) {
+      // eslint-disable-next-line no-console -- logger outputs to console in dev
       console.info(`[INFO] ${message}`, context);
     }
     // Info logs are typically not sent to monitoring in production
@@ -50,6 +51,7 @@ class Logger {
    */
   debug(message: string, context?: LogContext): void {
     if (isDev) {
+      // eslint-disable-next-line no-console -- logger outputs to console in dev
       console.debug(`[DEBUG] ${message}`, context);
     }
   }

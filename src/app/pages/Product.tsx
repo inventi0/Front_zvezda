@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Info, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Info, AlertCircle, CheckCircle2, Star, MessageSquare } from 'lucide-react';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import { Button } from '@/app/components/ui/button';
@@ -36,6 +36,8 @@ import { calculateOrderTotal } from '@/app/utils/orderCalculation';
 import { getProductLogo } from '@/app/utils/productAssets';
 import { toast } from 'sonner';
 import { storeCheckoutData } from '@/app/utils/checkoutStorage';
+import { getReviewsByProductId } from '@/app/data/mockData';
+import { ScrollArea } from '@/app/components/ui/scroll-area';
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -60,6 +62,11 @@ export default function ProductPage() {
     const calc = calculateOrderTotal(basePrice);
     return { ...calc, basePrice };
   }, [selectedDenom]);
+
+  const productReviews = useMemo(
+    () => (product ? getReviewsByProductId(product.id) : []),
+    [product]
+  );
 
   const handleCheckout = useCallback(() => {
     if (!product) return;
@@ -108,6 +115,8 @@ export default function ProductPage() {
 
     toast.success('Переход к оформлению...');
     navigate(`/checkout?productId=${product.id}`);
+  // fieldErrors used only for type/key check; omit from deps to avoid loop with setFieldErrors
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product, selectedAmount, email, accountId, selectedRegion, selectedServer, navigate]);
 
   // Early returns after all hooks
@@ -133,8 +142,8 @@ export default function ProductPage() {
           <div className="text-center">
             <h1 className="text-4xl font-bold mb-4">Товар не найден</h1>
             <p className="text-muted-foreground mb-4">{error || 'Товар не существует'}</p>
-            <Link to="/catalog">
-              <Button>Вернуться в каталог</Button>
+            <Link to="/#catalog">
+              <Button>Вернуться на главную</Button>
             </Link>
           </div>
         </main>
@@ -150,9 +159,9 @@ export default function ProductPage() {
       <main className="flex-1">
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           {/* Breadcrumb */}
-          <Link to="/catalog" className="inline-flex items-center text-xs sm:text-sm text-muted-foreground hover:text-foreground mb-4 sm:mb-6">
+          <Link to="/#catalog" className="inline-flex items-center text-xs sm:text-sm text-muted-foreground hover:text-foreground mb-4 sm:mb-6">
             <ArrowLeft className="h-4 w-4 mr-1" />
-            Назад к каталогу
+            Назад на главную
           </Link>
 
           <div className="grid lg:grid-cols-3 gap-6 sm:gap-8">
@@ -160,7 +169,7 @@ export default function ProductPage() {
             <div className="lg:col-span-2">
               <div className="mb-6">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className="w-16 h-16 flex items-center justify-center bg-muted rounded-lg">
+                  <div className="w-16 h-16 flex items-center justify-center bg-muted rounded-lg overflow-hidden">
                     <img 
                       src={getProductLogo(product.slug)} 
                       alt={`${product.name} logo`}
@@ -174,7 +183,79 @@ export default function ProductPage() {
                         <Badge>Популярное</Badge>
                       )}
                     </div>
-                    <Badge variant="secondary">{product.deliveryTimeText}</Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{product.deliveryTimeText}</Badge>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Star className="h-4 w-4 fill-warning text-warning" />
+                            {(product.rating != null || productReviews.length > 0) && (
+                              <span className="font-medium text-foreground">
+                                {(
+                                  product.rating ??
+                                  (productReviews.length > 0
+                                    ? productReviews.reduce((s, r) => s + r.rating, 0) / productReviews.length
+                                    : 0)
+                                ).toFixed(1)}
+                              </span>
+                            )}
+                            <span>({productReviews.length})</span>
+                            <MessageSquare className="h-4 w-4" />
+                            <span>Посмотреть отзывы</span>
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+                          <DialogHeader>
+                            <DialogTitle>Отзывы о {product.name}</DialogTitle>
+                            <DialogDescription>
+                              {productReviews.length === 0
+                                ? 'Пока нет отзывов.'
+                                : `${productReviews.length} отзывов`}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <ScrollArea className="flex-1 min-h-0 pr-4">
+                            <div className="space-y-4">
+                              {productReviews.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-4">
+                                  Станьте первым, кто оставит отзыв после покупки.
+                                </p>
+                              ) : (
+                                productReviews.map((r) => (
+                                  <div
+                                    key={r.id}
+                                    className="rounded-xl border border-border bg-muted/30 p-4 space-y-1"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex gap-0.5">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                          <Star
+                                            key={i}
+                                            className={`h-4 w-4 ${
+                                              i <= r.rating ? 'fill-warning text-warning' : 'text-muted-foreground/40'
+                                            }`}
+                                          />
+                                        ))}
+                                      </div>
+                                      <span className="text-xs text-muted-foreground">
+                                        {new Date(r.createdAt).toLocaleDateString('ru-RU', {
+                                          day: 'numeric',
+                                          month: 'long',
+                                          year: 'numeric',
+                                        })}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm">{r.text}</p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </ScrollArea>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                   </div>
                 </div>
                 <p className="text-muted-foreground">{product.description}</p>
@@ -364,7 +445,7 @@ export default function ProductPage() {
                         value={accountId}
                         onChange={(e) => setAccountId(e.target.value)}
                         placeholder="Введите ID"
-                        className="bg-input"
+                        className="bg-muted/20 ring-1 ring-border border-border"
                       />
                       {fieldErrors.accountId && (
                         <p className="text-xs text-red-500 mt-1">
@@ -384,7 +465,7 @@ export default function ProductPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your@email.com"
-                      className="bg-input"
+                      className="bg-muted/20 ring-1 ring-border border-border"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       Для чека и статуса заказа

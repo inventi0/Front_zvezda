@@ -1,6 +1,9 @@
-import { useState, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Zap, Shield, Clock, ArrowRight, Star, CheckCircle, CreditCard, Mail, Smartphone, CheckCircle2, Sparkles } from 'lucide-react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
+import kubikImage from '@/app/assets/element/kubik.svg?url';
+import fonVerhImage from '@/app/assets/images/фон_верх01.png?url';
+import { useNavigate } from 'react-router-dom';
+import { Star, CreditCard, ClipboardList, Clock, Filter, ChevronDown } from 'lucide-react';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import { Button } from '@/app/components/ui/button';
@@ -14,25 +17,57 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/app/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { ProductCard } from '@/app/components/ui/product-card';
 import { useProducts } from '@/app/hooks/useProducts';
+import type { ProductCategory } from '@/app/types';
 import { quickCheckoutSchema } from '@/app/utils/schemas';
 import { getProductImage, getProductLogo } from '@/app/utils/productAssets';
 import { toast } from 'sonner';
-import backgroundTopImage from '@/app/assets/images/фон_верх.png';
 import { cn } from '@/app/components/ui/utils';
-import { calculateOrderTotal } from '@/app/utils/orderCalculation';
+import { calculateOrderTotal, getCustomAmountLimits, computeCustomPrice } from '@/app/utils/orderCalculation';
 import { storeCheckoutData } from '@/app/utils/checkoutStorage';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const [selectedProduct, setSelectedProduct] = useState('1');
   const [selectedAmount, setSelectedAmount] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
   const [accountId, setAccountId] = useState('');
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState<{ email?: string; accountId?: string; amount?: string }>({});
-
+  const [catalogCategory, setCatalogCategory] = useState<ProductCategory | 'all'>('all');
+  const [catalogSort, setCatalogSort] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
+  const [balanceBtnBounce, setBalanceBtnBounce] = useState(false);
+  const balanceIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { products: allProducts, loading: productsLoading } = useProducts();
+
+  const resetBalanceIdle = useCallback(() => {
+    setBalanceBtnBounce(false);
+    if (balanceIdleTimerRef.current) {
+      clearTimeout(balanceIdleTimerRef.current);
+      balanceIdleTimerRef.current = null;
+    }
+    balanceIdleTimerRef.current = setTimeout(() => setBalanceBtnBounce(true), 3500);
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => resetBalanceIdle();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    resetBalanceIdle();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (balanceIdleTimerRef.current) clearTimeout(balanceIdleTimerRef.current);
+    };
+  }, [resetBalanceIdle]);
+
+  useEffect(() => {
+    if (window.location.hash !== '#catalog') return;
+    requestAnimationFrame(() => {
+      document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }, []);
+
   const { products: popularProducts } = useProducts({ popular: true });
 
   const product = useMemo(() => {
@@ -44,10 +79,52 @@ export default function HomePage() {
     return found;
   }, [allProducts, selectedProduct, productsLoading]);
 
+  const catalogCategories = useMemo(() => {
+    const cats: ProductCategory[] = ['games', 'subscriptions', 'wallet', 'services'];
+    return [
+      { value: 'all' as const, label: 'Все товары', count: allProducts.length },
+      ...cats.map((c) => ({
+        value: c,
+        label: c === 'games' ? 'Игры' : c === 'subscriptions' ? 'Подписки' : c === 'wallet' ? 'Подарочные карты' : 'Сервисы',
+        count: allProducts.filter((p) => p.category === c).length,
+      })),
+    ];
+  }, [allProducts]);
+
+  const filteredCatalog = useMemo(() => {
+    let list = catalogCategory === 'all'
+      ? [...allProducts]
+      : allProducts.filter((p) => p.category === catalogCategory);
+    if (catalogSort === 'popular') {
+      list = [...list].sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0));
+    } else if (catalogSort === 'price-asc') {
+      list = [...list].sort((a, b) => (a.denominations[0]?.price ?? 0) - (b.denominations[0]?.price ?? 0));
+    } else {
+      list = [...list].sort((a, b) => (b.denominations[0]?.price ?? 0) - (a.denominations[0]?.price ?? 0));
+    }
+    return list;
+  }, [allProducts, catalogCategory, catalogSort]);
+
   const handleProductChange = useCallback((value: string) => {
     setSelectedProduct(value);
-    // При смене товара сбрасываем сумму и ошибки, чтобы блок цены схлопывался
     setSelectedAmount('');
+    setCustomAmount('');
+    setErrors((prev) => ({ ...prev, amount: undefined }));
+  }, []);
+
+  const handleAmountSelect = useCallback((value: string) => {
+    setSelectedAmount(value);
+    setCustomAmount('');
+    setErrors((prev) => ({ ...prev, amount: undefined }));
+  }, []);
+
+  const handleCustomAmountChange = useCallback((value: string) => {
+    let v = value.replace(/\D/g, '');
+    const { max } = getCustomAmountLimits();
+    const n = parseInt(v, 10);
+    if (!Number.isNaN(n) && n > max) v = String(max);
+    setCustomAmount(v);
+    if (v) setSelectedAmount('');
     setErrors((prev) => ({ ...prev, amount: undefined }));
   }, []);
 
@@ -57,127 +134,313 @@ export default function HomePage() {
       return;
     }
 
-    // Validate with zod schema
+    const { min, max } = getCustomAmountLimits(product);
+    const useCustom = customAmount.trim() !== '';
+    const customNum = useCustom ? parseInt(customAmount.replace(/\D/g, ''), 10) : 0;
+    const validCustom = useCustom && !Number.isNaN(customNum) && customNum >= min && customNum <= max;
+
     const schema = quickCheckoutSchema(product.type);
     const result = schema.safeParse({
       email,
       accountId: product.type === 'top-up' ? accountId : undefined,
-      denominationId: selectedAmount,
+      denominationId: validCustom ? 'custom' : selectedAmount,
     });
 
     if (!result.success) {
       const fieldErrors: { email?: string; accountId?: string; amount?: string } = {};
       result.error.errors.forEach((err) => {
-        const field = err.path[0] as keyof typeof fieldErrors;
-        if (field === 'denominationId') {
-          fieldErrors.amount = err.message;
-        } else if (field in fieldErrors) {
-          fieldErrors[field] = err.message;
+        const pathKey = err.path[0] as string;
+        if (pathKey === 'denominationId') {
+          if (!(useCustom && !validCustom)) fieldErrors.amount = err.message;
+        } else if (pathKey === 'email' || pathKey === 'accountId' || pathKey === 'amount') {
+          fieldErrors[pathKey] = err.message;
         }
       });
+      if (useCustom && !validCustom && !fieldErrors.amount) {
+        if (Number.isNaN(customNum)) fieldErrors.amount = 'Введите число';
+        else if (customNum < min) fieldErrors.amount = `От ${min} ₽`;
+        else fieldErrors.amount = 'Сумма превышает допустимую';
+      }
       setErrors(fieldErrors);
       toast.error('Пожалуйста, исправьте ошибки в форме');
       return;
     }
 
-    const selectedDenom = product.denominations.find(d => d.id === selectedAmount);
-    if (!selectedDenom) {
-      toast.error('Номинал не найден');
-      return;
+    if (validCustom) {
+      const customPrice = computeCustomPrice(customNum, product);
+      storeCheckoutData({
+        productId: selectedProduct,
+        denominationId: 'custom',
+        email: result.data.email,
+        accountId: result.data.accountId,
+        customAmount: customNum,
+        customPrice,
+      });
+    } else {
+      const selectedDenom = product.denominations.find(d => d.id === selectedAmount);
+      if (!selectedDenom) {
+        setErrors((e) => ({ ...e, amount: 'Выберите сумму или введите свою' }));
+        toast.error('Выберите сумму или введите свою');
+        return;
+      }
+      storeCheckoutData({
+        productId: selectedProduct,
+        denominationId: selectedAmount,
+        email: result.data.email,
+        accountId: result.data.accountId,
+      });
     }
-
-    // Store checkout data securely
-    storeCheckoutData({
-      productId: selectedProduct,
-      denominationId: selectedAmount,
-      email: result.data.email,
-      accountId: result.data.accountId,
-    });
 
     toast.success('Переход к оформлению заказа...');
     navigate(`/checkout?productId=${selectedProduct}`);
-  }, [email, selectedAmount, product, accountId, selectedProduct, navigate]);
+  }, [email, selectedAmount, customAmount, product, accountId, selectedProduct, navigate]);
+
+  const { hasValidAmount, basePriceForSummary } = useMemo(() => {
+    if (!product) return { hasValidAmount: false, basePriceForSummary: 0 };
+    const { min, max } = getCustomAmountLimits(product);
+    const denom = product.denominations.find((d) => d.id === selectedAmount);
+    if (denom) return { hasValidAmount: true, basePriceForSummary: denom.price };
+    const n = parseInt(customAmount.replace(/\D/g, ''), 10);
+    const valid = !Number.isNaN(n) && n >= min && n <= max;
+    return {
+      hasValidAmount: valid,
+      basePriceForSummary: valid ? computeCustomPrice(n, product) : 0,
+    };
+  }, [product, selectedAmount, customAmount]);
 
   return (
-    <div className="flex flex-col min-h-screen relative">
+    <div className="flex flex-col min-h-screen relative bg-background">
+      {/* Фон верх: от самого верха (под хедером без прогала), плавный переход внизу — без резкого белого обрыва */}
+      <div
+        className="absolute top-0 left-0 right-0 w-full min-h-[85vh] z-0"
+        style={{
+          background: `
+            linear-gradient(to bottom, transparent 55%, rgba(241,243,242,0.4) 75%, #f1f3f2 85%, #ffffff 100%),
+            url(${fonVerhImage}) no-repeat top center / 100% auto
+          `,
+          backgroundColor: '#f1f3f2',
+        }}
+        aria-hidden
+      />
       <Header />
-      
-      <main className="flex-1 relative">
-        {/* Top Background Image - Full Width, от самого верха без отступов */}
-        <div className="w-full overflow-hidden relative -mt-[calc(1rem+4rem)] sm:-mt-[calc(1rem+4.5rem)]">
-          <img 
-            src={backgroundTopImage} 
-            alt=""
-            className="w-full h-auto object-cover"
-            style={{ display: 'block' }}
-          />
-          {/* Text Overlay */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3 sm:px-4 md:px-6">
-            <div className="bg-black/40 backdrop-blur-sm px-3 py-3 sm:px-6 sm:py-6 md:px-12 md:py-8 rounded-lg w-[calc(100%-1.5rem)] sm:w-auto sm:max-w-[90%] md:max-w-full -mt-[100px]">
-              <h2 className="font-bold text-white mb-1 drop-shadow-lg leading-tight break-words" style={{ fontSize: 'clamp(0.875rem, 3.2vw, 4.5rem)' }}>
-                ЦИФРОВОЙ МАРКЕТПЛЕЙС
-              </h2>
-              <p className="text-white drop-shadow-md leading-tight break-words" style={{ fontSize: 'clamp(0.75rem, 1.3vw, 1.5rem)' }}>
-                сервисов и внутриигровых товаров
-              </p>
+      <main className="flex-1 relative overflow-x-hidden min-h-screen z-10">
+
+        {/* Hero: зелёный фон по высоте текста; кубик absolute, те же размеры, выходит за границы зелёного */}
+        <div className="w-full overflow-visible relative z-10 -mt-[calc(0.5rem+3.5rem)] sm:-mt-[calc(0.5rem+4rem)] min-h-0 pt-32 sm:pt-36 md:pt-40 lg:pt-88 xl:pt-[28rem] 2xl:pt-[32rem] pb-10 sm:pb-12 lg:pb-1">
+          <div className="container mx-auto max-w-7xl px-5 sm:px-8 md:px-10 lg:px-12 xl:px-16 relative overflow-visible z-10">
+            {/* Зелёный блок — на адаптиве: кнопка слева (~1/3) + текст справа (~2/3); lg+: только текст, кубик absolute */}
+            <div className="relative rounded-2xl overflow-hidden w-full flex bg-[#83A393] border border-border">
+              {/* Адаптив: кнопка слева (чуть меньше фона, 10px отступ, 6px скругление), справа текст */}
+              <div className="lg:hidden flex flex-1 flex-row min-h-0 items-stretch">
+                <div className="w-1/3 min-w-[100px] max-w-[160px] shrink-0 p-2.5 flex items-stretch">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('quick-checkout')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="w-full flex items-center justify-center rounded-[6px] bg-[#274D31] text-white font-semibold text-xs sm:text-sm px-3 py-2.5 hover:bg-[#1e3d28] active:opacity-95 transition-colors"
+                  >
+                    Залить баланс
+                  </button>
+                </div>
+                <div className="flex-1 flex flex-col justify-center items-start text-left px-4 sm:px-5 py-4 sm:py-5 min-w-0">
+                  <h1 className="text-white font-bold leading-tight text-base sm:text-lg md:text-xl">
+                    ЦИФРОВОЙ МАРКЕТПЛЕЙС<br />сервисов и внутриигровых товаров
+                  </h1>
+                  <p className="text-white/95 text-xs sm:text-sm md:text-base mt-1 sm:mt-2">
+                    Мы уже готовы пополнить твой Steam по выгодному курсу
+                  </p>
+                </div>
+              </div>
+              {/* Десктоп: только текст справа, высота по тексту */}
+              <div className="hidden lg:flex flex-1 justify-end">
+                <div className="relative flex flex-col items-stretch text-right px-6 md:px-8 lg:px-10 xl:px-12 lg:pl-[38%] py-4 sm:py-5 md:py-6">
+                  <h1 className="text-white font-bold leading-tight text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-[2.25rem]">
+                    ЦИФРОВОЙ МАРКЕТПЛЕЙС<br />сервисов и внутриигровых товаров
+                  </h1>
+                  <p className="text-white/95 text-xs sm:text-sm md:text-base lg:text-lg mt-1 sm:mt-2">
+                    Мы уже готовы пополнить твой Steam по выгодному курсу
+                  </p>
+                </div>
+              </div>
+            </div>
+            {/* Kubik: только lg+; лёгкая левитация */}
+            <div className="absolute left-6 sm:left-10 md:left-14 lg:left-20 xl:left-24 top-1/2 -translate-y-1/2 hidden lg:flex items-center justify-center lg:justify-start pointer-events-none overflow-visible">
+              <motion.div
+                className="w-full max-w-[160px] sm:max-w-[200px] md:max-w-[260px] lg:max-w-[340px] xl:max-w-[420px]"
+                animate={{ y: [0, -10, 0] }}
+                transition={{
+                  duration: 2.8,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              >
+                <img
+                  src={kubikImage}
+                  alt=""
+                  className="w-full h-auto object-contain"
+                />
+              </motion.div>
             </div>
           </div>
         </div>
 
-        {/* Hero Section - Overlapping the background */}
-        <section className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-8 sm:pt-14 md:pt-20 lg:pt-24 pb-12 sm:pb-16 md:pb-20 lg:pb-24 relative -mt-16 sm:-mt-24 md:-mt-32 lg:-mt-40 xl:-mt-52 2xl:-mt-72" style={{ zIndex: 1 }}>
-          <div className="grid lg:grid-cols-2 gap-8 sm:gap-10 md:gap-12 lg:gap-14 items-start">
-            {/* Left Side - Hero Content */}
-            <div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-7 leading-tight tracking-tight">
-                Быстрое пополнение<br />
-                <span className="text-primary">игровых валют</span>
-              </h1>
-              <p className="text-xl text-muted-foreground mb-10 max-w-xl">
-                Пополняйте Steam, PlayStation, Xbox и другие сервисы за 1-3 минуты. 
-                Без регистрации, безопасно и с прозрачной комиссией.
-              </p>
+        {/* Кнопка «Залить баланс» под героем — только lg+; стрелка вниз; подпрыгивает при простое */}
+        <div className="hidden lg:flex container mx-auto max-w-7xl px-5 sm:px-8 md:px-10 lg:px-12 xl:px-16 justify-center -mt-2 sm:-mt-3 lg:mt-6 relative z-10">
+          <motion.div
+            onMouseEnter={resetBalanceIdle}
+            onFocus={resetBalanceIdle}
+            animate={balanceBtnBounce ? { y: [0, -6, 0] } : { y: 0 }}
+            transition={
+              balanceBtnBounce
+                ? { duration: 0.7, repeat: Infinity, ease: 'easeOut' }
+                : { duration: 0.2 }
+            }
+          >
+            <Button
+              size="lg"
+              className="flex items-center gap-2"
+              onClick={() => {
+                document.getElementById('quick-checkout')?.scrollIntoView({ behavior: 'smooth' });
+                resetBalanceIdle();
+              }}
+            >
+              Залить баланс
+              <ChevronDown className="h-5 w-5" />
+            </Button>
+          </motion.div>
+        </div>
 
-              {/* Features */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mb-8 sm:mb-10">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Zap className="h-5 w-5" />
+        {/* Секция: bento «Инструкция» слева, форма быстрого пополнения справа */}
+        <section id="quick-checkout" className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 md:pt-6 lg:pt-10 pb-0 relative z-10 scroll-mt-24">
+          <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-10 items-start">
+            {/* Слева — bento «Инструкция» (как на референсе) */}
+            <div className="order-2 lg:order-1 mt-4 sm:mt-8 lg:mt-16">
+              <div
+                className={cn(
+                  'relative grid grid-cols-2 gap-2 sm:gap-3 rounded-2xl p-2 sm:p-3 transition-resize',
+                  'bg-muted/30 border border-border',
+                  'min-h-[280px] sm:min-h-[320px]'
+                )}
+              >
+                <h2 className="col-span-2 text-xl sm:text-2xl font-bold px-2 sm:px-3 pt-1 pb-1 sm:pb-2">
+                  Инструкция
+                </h2>
+                {/* Шаг 1 — высокая левая карточка (как Real-time Analytics) */}
+                <div
+                  className={cn(
+                    'col-span-1 row-span-2 flex flex-col rounded-xl sm:rounded-2xl p-4 sm:p-5',
+                    'bg-card/95 border border-border shadow-sm',
+                    'hover:border-primary/20 hover:shadow-md transition-all duration-300 ease-out'
+                  )}
+                >
+                  <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 overflow-hidden mb-3 sm:mb-4">
+                    {product ? (
+                      <img
+                        src={getProductLogo(product.slug)}
+                        alt=""
+                        className="h-6 w-6 sm:h-8 sm:w-8 object-contain"
+                      />
+                    ) : (
+                      <span className="text-primary font-bold text-lg sm:text-xl">1</span>
+                    )}
                   </div>
-                  <div>
-                    <div className="font-semibold text-sm md:text-base">Моментально</div>
-                    <div className="text-xs md:text-sm text-muted-foreground">1-3 минуты</div>
+                  <h3 className="font-bold text-base sm:text-lg text-foreground mb-1.5">
+                    Узнайте ID или имя аккаунта
+                  </h3>
+                  {(() => {
+                    const isTopUp = product?.type === 'top-up';
+                    const hasHint = isTopUp && !!product?.instructions;
+                    const isNoId = product && !isTopUp;
+                    // Параграф только если нет товара — подсказка всегда в блоке
+                    if (hasHint || isNoId || (product && isTopUp)) return null;
+                    return (
+                      <p className="text-xs sm:text-sm text-muted-foreground leading-snug flex-1">
+                        Выберите товар в форме справа — здесь появится подсказка для вашей платформы.
+                      </p>
+                    );
+                  })()}
+                  <div
+                    className={cn(
+                      'mt-3 sm:mt-4 min-h-12 sm:min-h-14 rounded-lg bg-muted/50 border border-dashed border-border flex items-center justify-center px-3 py-2 sm:px-4 sm:py-3 transition-resize',
+                      product ? 'flex-1 min-h-0' : undefined
+                    )}
+                  >
+                    <span className="text-[10px] sm:text-xs text-muted-foreground text-center leading-snug">
+                      {product?.type === 'top-up' && product?.instructions
+                        ? <>Подсказка: {product.instructions}</>
+                        : product && product.type !== 'top-up'
+                          ? 'ID аккаунта не требуется. Только email и номинал.'
+                          : product?.type === 'top-up'
+                            ? 'Подсказка: ID обычно в настройках аккаунта или в профиле игры. Укажите его в форме справа.'
+                            : 'Выберите товар справа → подсказка появится здесь'}
+                    </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10 text-success">
-                    <Shield className="h-5 w-5" />
+
+                {/* Шаг 2 — средняя карточка справа сверху (как Global CDN) */}
+                <div
+                  className={cn(
+                    'rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col',
+                    'bg-card/95 border border-border shadow-sm',
+                    'hover:border-primary/20 hover:shadow-md transition-all duration-300 ease-out'
+                  )}
+                >
+                  <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary mb-2">
+                    <ClipboardList className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
                   </div>
-                  <div>
-                    <div className="font-semibold text-sm md:text-base">Безопасно</div>
-                    <div className="text-xs md:text-sm text-muted-foreground">SSL шифрование</div>
-                  </div>
+                  <h3 className="font-bold text-sm sm:text-base text-foreground mb-1">
+                    Заполните форму
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    {product?.type === 'top-up'
+                      ? 'Укажите ID аккаунта, сумму пополнения и email.'
+                      : product && (product.type === 'voucher' || product.type === 'gift-card')
+                        ? 'Укажите email и выберите номинал.'
+                        : 'Выберите товар справа, затем заполните форму.'}
+                  </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10 text-warning">
-                    <Clock className="h-5 w-5" />
+
+                {/* Шаг 3 — средняя карточка справа снизу (как Secure Auth) */}
+                <div
+                  className={cn(
+                    'rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col',
+                    'bg-card/95 border border-border shadow-sm',
+                    'hover:border-primary/20 hover:shadow-md transition-all duration-300 ease-out'
+                  )}
+                >
+                  <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary mb-2">
+                    <CreditCard className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
                   </div>
-                  <div>
-                    <div className="font-semibold text-sm md:text-base">24/7</div>
-                    <div className="text-xs md:text-sm text-muted-foreground">Всегда доступно</div>
-                  </div>
+                  <h3 className="font-bold text-sm sm:text-base text-foreground mb-1">
+                    Оплатите картой или СБП
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    Мы зачислим средства на ваш баланс практически сразу.
+                  </p>
+                </div>
+
+                {/* Нижняя полоска на всю ширину */}
+                <div
+                  className={cn(
+                    'col-span-2 rounded-xl sm:rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 transition-resize',
+                    'bg-card/95 border border-border',
+                    'flex items-center justify-center gap-3 sm:gap-4 flex-wrap'
+                  )}
+                >
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
+                    <Star className="h-4 w-4 text-primary" />
+                    Без регистрации
+                  </span>
+                  <span className="text-border">|</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4 text-primary" />
+                    Поддержка 24/7
+                  </span>
                 </div>
               </div>
-
-              <Link to="/catalog">
-                <Button size="lg" className="group">
-                  Открыть каталог
-                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
             </div>
 
-            {/* Right Side - Quick Checkout Card */}
+            {/* Справа — быстрое пополнение */}
+            <div className="order-1 lg:order-2 mt-4 sm:mt-8 lg:mt-16">
             <Card className="border-2 shadow-2xl w-full">
               <CardContent className="p-4 sm:p-6">
                 <div className="mb-7">
@@ -195,7 +458,7 @@ export default function HomePage() {
                       value={selectedProduct}
                       onValueChange={handleProductChange}
                     >
-                      <SelectTrigger id="product">
+                      <SelectTrigger id="product" className="ring-1 ring-primary/10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -215,25 +478,47 @@ export default function HomePage() {
                     </Select>
                   </div>
 
-                  {/* Amount Selection */}
-                  {product && (
-                    <div className="space-y-2">
-                      <Label htmlFor="amount">Сумма</Label>
-                      <Select value={selectedAmount} onValueChange={setSelectedAmount}>
-                        <SelectTrigger id="amount">
-                          <SelectValue placeholder="Выберите сумму" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {product.denominations.map((denom) => (
-                            <SelectItem key={denom.id} value={denom.id}>
-                              {denom.amount} {denom.currency} — {denom.price} ₽
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
-                    </div>
-                  )}
+                  {/* Amount Selection — плавное появление/скрытие */}
+                  <div
+                    className={cn(
+                      "overflow-hidden transition-all duration-300 ease-out",
+                      product ? "max-h-64 opacity-100 p-1" : "max-h-0 opacity-0"
+                    )}
+                  >
+                    {product && (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="amount">Сумма</Label>
+                          <Select value={selectedAmount} onValueChange={handleAmountSelect}>
+                            <SelectTrigger id="amount" className="ring-1 ring-primary/10">
+                              <SelectValue placeholder="Выберите сумму" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {product.denominations.map((denom) => (
+                                <SelectItem key={denom.id} value={denom.id}>
+                                  {denom.amount} {denom.currency} — {denom.price} ₽
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="customAmount">Или введите свою сумму</Label>
+                          <Input
+                            id="customAmount"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={`От ${getCustomAmountLimits(product).min} ₽`}
+                            value={customAmount}
+                            onChange={(e) => handleCustomAmountChange(e.target.value)}
+                            className="bg-muted/20 ring-1 ring-border border-border"
+                            aria-invalid={!!errors.amount}
+                          />
+                        </div>
+                        {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Account ID block — всегда на месте для стабильного layout */}
                   <div className="space-y-2">
@@ -261,17 +546,12 @@ export default function HomePage() {
                           : 'Не требуется для этого товара'
                       }
                       className={cn(
-                        "bg-input",
+                        "bg-muted/20 ring-1 ring-border border-border",
                         product?.type !== 'top-up' && "opacity-60 cursor-not-allowed"
                       )}
                       disabled={product?.type !== 'top-up'}
                       aria-invalid={!!errors.accountId}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {product?.type === 'top-up'
-                        ? product.instructions || 'Укажите ваш ID аккаунта'
-                        : 'Для этого типа товара ID аккаунта не требуется'}
-                    </p>
                     {errors.accountId && (
                       <p className="text-red-500 text-xs mt-1">{errors.accountId}</p>
                     )}
@@ -287,42 +567,34 @@ export default function HomePage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="your@email.com"
-                      className="bg-input"
+                      className="bg-muted/20 ring-1 ring-border border-border"
                       aria-invalid={!!errors.email}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Для чека и статуса заказа
-                    </p>
                     {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                   </div>
 
                   {/* Price Summary (плавное появление/скрытие) */}
                   <div
                     className={cn(
-                      // Плавное разворачивание и схлопывание блока с ценой
-                      "overflow-hidden transition-all duration-400 ease-in-out",
-                      selectedAmount && product
+                      "overflow-hidden transition-all duration-300 ease-out",
+                      hasValidAmount && product
                         ? "max-h-40 opacity-100 mt-4"
                         : "max-h-0 opacity-0 mt-0",
                     )}
                   >
-                    {selectedAmount && product && (
+                    {hasValidAmount && product && basePriceForSummary > 0 && (
                       <div className="pt-4 border-t space-y-2">
                         {(() => {
-                          const denom = product.denominations.find(
-                            (d) => d.id === selectedAmount,
-                          );
-                          const basePrice = denom?.price ?? 0;
                           const {
                             commission,
                             total,
                             commissionPercent,
-                          } = calculateOrderTotal(basePrice);
+                          } = calculateOrderTotal(basePriceForSummary);
                           return (
                             <>
                               <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Сумма</span>
-                                <span>{basePrice} ₽</span>
+                                <span>{basePriceForSummary} ₽</span>
                               </div>
                               <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">
@@ -345,204 +617,99 @@ export default function HomePage() {
                     className="w-full" 
                     size="lg"
                     onClick={handleQuickCheckout}
-                    disabled={!selectedAmount || !email || (product?.type === 'top-up' && !accountId)}
+                    disabled={!hasValidAmount || !email || (product?.type === 'top-up' && !accountId)}
                   >
                     Оплатить
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </section>
-
-        {/* How It Works - Bento Style */}
-        <section className="pt-0 pb-12 sm:pb-16 md:pb-20 lg:pt-2 lg:pb-24">
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-center mb-8 sm:mb-12 md:mb-16 px-2">Как это работает</h2>
-            
-            {/* Bento Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
-              {/* Step 1 - Large Card */}
-              <Card className="md:col-span-2 lg:col-span-2 border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-primary/5 to-primary/10">
-                <CardContent className="p-6 lg:p-8 h-full flex flex-col">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 border-2 border-primary/30 text-primary font-bold text-3xl shadow-md">
-                      1
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-2xl lg:text-3xl">Выберите товар и сумму</h3>
-                      <p className="text-muted-foreground text-sm mt-1">Начните с выбора</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-muted-foreground">Выберите нужный товар из каталога или используйте быструю форму на главной</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-muted-foreground">Укажите желаемую сумму пополнения</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-muted-foreground">Введите ID аккаунта (для пополнений) и email для получения чека</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Payment Methods - Medium Card */}
-              <Card className="md:col-span-2 lg:col-span-2 border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-primary/5 to-background">
-                <CardContent className="p-6 lg:p-8 h-full flex flex-col">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 border-2 border-primary/30 text-primary font-bold text-3xl shadow-md">
-                      2
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-2xl lg:text-3xl">Оплата</h3>
-                      <p className="text-muted-foreground text-sm mt-1">Безопасно и быстро</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 flex-1">
-                    <div className="flex flex-col items-center justify-center p-4 rounded-xl bg-card border border-border">
-                      <CreditCard className="h-8 w-8 text-primary mb-2" />
-                      <p className="text-sm font-semibold text-center">Банковская карта</p>
-                      <p className="text-xs text-muted-foreground text-center mt-1">Visa, Mastercard</p>
-                    </div>
-                    <div className="flex flex-col items-center justify-center p-4 rounded-xl bg-card border border-border">
-                      <Smartphone className="h-8 w-8 text-primary mb-2" />
-                      <p className="text-sm font-semibold text-center">СБП</p>
-                      <p className="text-xs text-muted-foreground text-center mt-1">Быстрый платеж</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Step 3 - Large Card */}
-              <Card className="md:col-span-2 lg:col-span-2 border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-primary/5 to-primary/10">
-                <CardContent className="p-6 lg:p-8 h-full flex flex-col">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 border-2 border-primary/30 text-primary font-bold text-3xl shadow-md">
-                      3
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-2xl lg:text-3xl">Получение</h3>
-                      <p className="text-muted-foreground text-sm mt-1">Быстро и автоматически</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-start gap-3">
-                      <Sparkles className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold">Пополнение аккаунта</p>
-                        <p className="text-xs text-muted-foreground mt-1">Средства зачисляются автоматически на указанный аккаунт</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Mail className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold">Код/Ваучер</p>
-                        <p className="text-xs text-muted-foreground mt-1">Код отправляется на указанный email или отображается в статусе заказа</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold">Уведомление</p>
-                        <p className="text-xs text-muted-foreground mt-1">Вы получите подтверждение на email после выполнения заказа</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* No Registration - Small Card */}
-              <Card className="border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-primary/5 to-background">
-                <CardContent className="p-6 h-full flex flex-col items-center justify-center text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/20 border-2 border-primary/30 mb-4">
-                    <Star className="h-7 w-7 text-primary" />
-                  </div>
-                  <h3 className="font-bold text-xl mb-2">Без регистрации</h3>
-                  <p className="text-sm text-muted-foreground">Покупайте сразу</p>
-                  <p className="text-xs text-muted-foreground mt-2">Только email</p>
-                </CardContent>
-              </Card>
-
-              {/* Support - Small Card */}
-              <Card className="border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-background to-card">
-                <CardContent className="p-6 h-full flex flex-col items-center justify-center text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/20 border-2 border-primary/30 mb-4">
-                    <Clock className="h-7 w-7 text-primary" />
-                  </div>
-                  <h3 className="font-bold text-xl mb-2">24/7</h3>
-                  <p className="text-sm text-muted-foreground">Поддержка</p>
-                  <p className="text-xs text-muted-foreground mt-2">Всегда на связи</p>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </section>
 
-        {/* Popular Products */}
-        <section className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16 md:py-20">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-            <h2 className="text-2xl sm:text-3xl font-bold">Популярные товары</h2>
-            <Link to="/catalog" className="w-full sm:w-auto">
-              <Button variant="outline" className="w-full sm:w-auto">
-                Все товары
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+        {/* Каталог — категории, фильтр, сетка товаров */}
+        <section id="catalog" className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-12 sm:pb-16 md:pb-20 relative z-10">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">Каталог</h2>
+
+          {/* Категории и сортировка */}
+          <div className="mb-6 sm:mb-8 space-y-3 sm:space-y-4">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center sm:justify-between">
+              {/* Категории — табы (десктоп) */}
+              <div className="hidden md:block overflow-x-auto">
+                <Tabs value={catalogCategory} onValueChange={(v) => setCatalogCategory(v as ProductCategory | 'all')}>
+                  <TabsList className="grid grid-cols-5 w-full min-w-max">
+                    {catalogCategories.map((cat) => (
+                      <TabsTrigger key={cat.value} value={cat.value} className="text-xs sm:text-sm whitespace-nowrap">
+                        {cat.label}
+                        <span className="ml-1.5 text-xs text-muted-foreground">({cat.count})</span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              </div>
+              {/* Категории — селект (мобильный) */}
+              <div className="md:hidden">
+                <Select value={catalogCategory} onValueChange={(v) => setCatalogCategory(v as ProductCategory | 'all')}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Категория" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {catalogCategories.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label} ({cat.count})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Сортировка */}
+              <Select value={catalogSort} onValueChange={(v) => setCatalogSort(v as 'popular' | 'price-asc' | 'price-desc')}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <Filter className="h-4 w-4 mr-2 shrink-0" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="popular">Популярные</SelectItem>
+                  <SelectItem value="price-asc">Цена: по возрастанию</SelectItem>
+                  <SelectItem value="price-desc">Цена: по убыванию</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
           {productsLoading ? (
             <div className="text-center py-16">
               <p className="text-muted-foreground">Загрузка товаров...</p>
             </div>
+          ) : filteredCatalog.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground mb-4">Товары не найдены</p>
+              <Button variant="outline" onClick={() => { setCatalogCategory('all'); setCatalogSort('popular'); }}>
+                Сбросить фильтры
+              </Button>
+            </div>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
-              {popularProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                id={product.id}
-                slug={product.slug}
-                name={product.name}
-                image={getProductImage(product.slug)}
-                logo={getProductLogo(product.slug)}
-                price={product.denominations[0]?.price || 0}
-                deliveryTimeText={product.deliveryTimeText}
-                deliverySpeed={product.deliverySpeed}
-                popular={product.popular}
-                enableAnimations={true}
-              />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
+              {filteredCatalog.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  id={p.id}
+                  slug={p.slug}
+                  name={p.name}
+                  image={getProductImage(p.slug)}
+                  logo={getProductLogo(p.slug)}
+                  price={p.denominations[0]?.price || 0}
+                  deliveryTimeText={p.deliveryTimeText}
+                  deliverySpeed={p.deliverySpeed}
+                  popular={p.popular}
+                  enableAnimations={true}
+                  rating={p.rating}
+                  reviewsCount={p.reviewsCount}
+                />
               ))}
             </div>
           )}
-        </section>
-
-        {/* Trust Section */}
-        <section className="bg-card border-y border-border py-12 sm:py-16 md:py-20">
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center max-w-3xl mx-auto">
-              <h2 className="text-2xl sm:text-3xl font-bold mb-4 px-2">Нам доверяют</h2>
-              <p className="text-muted-foreground mb-6 sm:mb-8 px-4">
-                Более 10,000 успешных заказов. Средний рейтинг 4.9/5.0
-              </p>
-              <div className="grid sm:grid-cols-3 gap-6 sm:gap-8 px-4">
-                <div>
-                  <div className="text-4xl font-bold text-primary mb-2">10K+</div>
-                  <div className="text-sm text-muted-foreground">Успешных заказов</div>
-                </div>
-                <div>
-                  <div className="text-4xl font-bold text-primary mb-2">4.9/5.0</div>
-                  <div className="text-sm text-muted-foreground">Средний рейтинг</div>
-                </div>
-                <div>
-                  <div className="text-4xl font-bold text-primary mb-2">1-3 мин</div>
-                  <div className="text-sm text-muted-foreground">Среднее время исполнения</div>
-                </div>
-              </div>
-            </div>
-          </div>
         </section>
       </main>
 

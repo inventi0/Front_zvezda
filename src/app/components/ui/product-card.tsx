@@ -3,6 +3,7 @@ import { useState, memo } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
+import { Star } from "lucide-react";
 interface ProductCardProps {
   id: string;
   slug: string;
@@ -14,6 +15,9 @@ interface ProductCardProps {
   deliverySpeed: "instant" | "fast" | "manual";
   popular?: boolean;
   enableAnimations?: boolean;
+  /** Optional: trust layer. Show rating when provided. */
+  rating?: number;
+  reviewsCount?: number;
 }
 
 function ProductCardComponent({
@@ -27,6 +31,8 @@ function ProductCardComponent({
   deliverySpeed,
   popular = false,
   enableAnimations = true,
+  rating,
+  reviewsCount,
 }: ProductCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const shouldReduceMotion = useReducedMotion();
@@ -114,7 +120,7 @@ function ProductCardComponent({
     >
       <Link to={`/product/${slug}`} className="block h-full">
         <motion.div
-          className="bg-card border border-border/50 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full flex flex-col group"
+          className="bg-card border border-border/50 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 ease-out h-full flex flex-col group"
           variants={shouldAnimate ? contentVariants : {}}
           onHoverStart={() => setIsHovered(true)}
           onHoverEnd={() => setIsHovered(false)}
@@ -196,6 +202,21 @@ function ProductCardComponent({
               {name}
             </h3>
 
+            {/* Optional rating (trust layer) */}
+            {(rating != null || (reviewsCount != null && reviewsCount > 0)) && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
+                {rating != null && (
+                  <>
+                    <Star className="h-4 w-4 fill-warning text-warning shrink-0" />
+                    <span className="font-medium text-foreground">{rating.toFixed(1)}</span>
+                  </>
+                )}
+                {reviewsCount != null && reviewsCount > 0 && (
+                  <span>({reviewsCount})</span>
+                )}
+              </div>
+            )}
+
             {/* Price and Badge */}
             <div className="flex items-center justify-between mt-auto">
               <motion.span
@@ -227,6 +248,8 @@ export const ProductCard = memo(ProductCardComponent, (prevProps, nextProps) => 
     prevProps.deliverySpeed === nextProps.deliverySpeed &&
     prevProps.deliveryTimeText === nextProps.deliveryTimeText &&
     prevProps.name === nextProps.name &&
-    prevProps.slug === nextProps.slug
+    prevProps.slug === nextProps.slug &&
+    prevProps.rating === nextProps.rating &&
+    prevProps.reviewsCount === nextProps.reviewsCount
   );
 });

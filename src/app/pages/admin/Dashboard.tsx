@@ -59,7 +59,7 @@ export default function AdminDashboard() {
     { name: 'В обработке', value: pendingOrders, color: '#f59e0b' },
     { name: 'Ошибки', value: failedOrders, color: '#ef4444' },
     { name: 'Проверка', value: orderStats.manualReview, color: '#6366f1' },
-  ], [successOrders, pendingOrders, failedOrders, orders]);
+  ], [successOrders, pendingOrders, failedOrders, orderStats.manualReview]);
 
   const topProducts = useMemo(() => {
     if (!stats) return [];
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Status Cards */}
-        <div className="grid sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">

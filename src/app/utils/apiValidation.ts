@@ -35,19 +35,3 @@ export function validateApiResponse<T>(
     throw error;
   }
 }
-
-/**
- * Safe validate - returns null instead of throwing
- * Useful for optional validations
- */
-export function safeValidateApiResponse<T>(
-  data: unknown,
-  schema: z.ZodSchema<T>,
-  context: string
-): T | null {
-  try {
-    return validateApiResponse(data, schema, context);
-  } catch {
-    return null;
-  }
-}

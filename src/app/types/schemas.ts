@@ -4,7 +4,19 @@
  */
 
 import { z } from 'zod';
-import type { Product, Order, ProductCategory, ProductType, DeliverySpeed, OrderStatus } from './index';
+import type {
+  Product,
+  Order,
+  OrderTimelineEvent,
+  ProductCategory,
+  ProductType,
+  DeliverySpeed,
+  OrderStatus,
+  GameCategory,
+  ProductTypeEntity,
+  Seller,
+  Review,
+} from './index';
 
 /**
  * Denomination schema
@@ -42,6 +54,50 @@ export const ProductSchema: z.ZodType<Product> = z.object({
     question: z.string(),
     answer: z.string(),
   })).optional(),
+  gameCategoryId: z.string().optional(),
+  productTypeId: z.string().optional(),
+  sellerId: z.string().optional(),
+  rating: z.number().min(0).max(5).optional(),
+  reviewsCount: z.number().int().nonnegative().optional(),
+});
+
+export const GameCategorySchema: z.ZodType<GameCategory> = z.object({
+  id: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  icon: z.string(),
+});
+
+export const ProductTypeEntitySchema: z.ZodType<ProductTypeEntity> = z.object({
+  id: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  icon: z.string(),
+});
+
+export const SellerSchema: z.ZodType<Seller> = z.object({
+  id: z.string(),
+  nickname: z.string(),
+  avatar: z.string(),
+  rating: z.number(),
+  reviewsCount: z.number(),
+  salesCount: z.number(),
+});
+
+export const ReviewSchema: z.ZodType<Review> = z.object({
+  id: z.string(),
+  productId: z.string(),
+  sellerId: z.string().optional(),
+  orderId: z.string().optional(),
+  rating: z.number(),
+  text: z.string(),
+  createdAt: z.string(),
+});
+
+const OrderTimelineEventSchema: z.ZodType<OrderTimelineEvent> = z.object({
+  timestamp: z.string(),
+  status: z.string(),
+  message: z.string(),
 });
 
 /**
@@ -64,9 +120,13 @@ export const OrderSchema: z.ZodType<Order> = z.object({
   paymentMethod: z.enum(['card', 'sbp']),
   createdAt: z.string(),
   updatedAt: z.string(),
+  timeline: z.array(OrderTimelineEventSchema),
   failureReason: z.string().optional(),
   voucherCode: z.string().optional(),
+  provider: z.string().optional(),
   note: z.string().optional(),
+  escrowStatus: z.enum(['PAID', 'IN_ESCROW', 'DELIVERED', 'DISPUTE', 'RELEASED']).optional(),
+  sellerId: z.string().optional(),
 });
 
 /**

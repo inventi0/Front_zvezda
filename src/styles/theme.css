@@ -193,3 +193,17 @@
     line-height: 1.5;
   }
 }
+
+/* Плавное изменение размера блоков при увеличении/уменьшении */
+@layer utilities {
+  .transition-resize {
+    transition:
+      height 0.3s ease-out,
+      min-height 0.3s ease-out,
+      max-height 0.3s ease-out,
+      width 0.3s ease-out,
+      min-width 0.3s ease-out,
+      max-width 0.3s ease-out,
+      opacity 0.3s ease-out;
+  }
+}

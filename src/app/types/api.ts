@@ -3,7 +3,15 @@
  * These types define the contract between frontend and backend
  */
 
-import type { Product, Order, OrderStatus, AdminStats, AdminOrderFilters } from './index';
+import type {
+  Product,
+  Order,
+  OrderStatus,
+  AdminStats,
+  AdminOrderFilters,
+  User,
+  AuthTokens,
+} from './index';
 
 // ============================================================================
 // COMMON API TYPES
@@ -59,6 +67,9 @@ export interface CreateOrderRequest {
   region?: string;
   server?: string;
   paymentMethod: 'card' | 'sbp';
+  /** При своей сумме: сумма пополнения и цена в ₽ */
+  customAmount?: number;
+  customPrice?: number;
 }
 
 export interface CreateOrderResponse {

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { calculateOrderTotal, calculateCommissionFromTotal, formatPrice } from './orderCalculation';
+import {
+  calculateOrderTotal,
+  calculateCommissionFromTotal,
+  formatPrice,
+  sellerIncomeCalculator,
+} from './orderCalculation';
 
 describe('orderCalculation', () => {
   describe('calculateOrderTotal', () => {
@@ -54,6 +59,23 @@ describe('orderCalculation', () => {
     it('should format price with custom currency', () => {
       const formatted = formatPrice(100, 'USD');
       expect(formatted).toContain('100');
+    });
+  });
+
+  describe('sellerIncomeCalculator', () => {
+    it('should return seller income = basePrice, commission, buyerTotal', () => {
+      const r = sellerIncomeCalculator(1000);
+      expect(r.sellerIncome).toBe(1000);
+      expect(r.commission).toBe(100);
+      expect(r.buyerTotal).toBe(1100);
+      expect(r.commissionPercent).toBe(0.1);
+    });
+
+    it('should accept custom commission percent', () => {
+      const r = sellerIncomeCalculator(1000, 0.15);
+      expect(r.sellerIncome).toBe(1000);
+      expect(r.commission).toBe(150);
+      expect(r.buyerTotal).toBe(1150);
     });
   });
 });

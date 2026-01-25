@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
@@ -9,13 +9,19 @@ import { Label } from '@/app/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { useAuth } from '@/app/hooks/useAuth';
+import { useAuthStore } from '@/app/stores/auth.store';
 import { loginSchema, registerSchema } from '@/app/utils/schemas';
 import { toast } from 'sonner';
+import { config } from '@/app/config/env';
+
+function getRedirectPath(user: { role: string } | null): string {
+  if (user?.role === 'admin' || user?.role === 'support') return '/admin';
+  return '/';
+}
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { login, register, isAuthenticated, isLoading: authLoading, error: authError } = useAuth();
+  const { login, register, user, isAuthenticated, isLoading: authLoading, error: authError } = useAuth();
   const [activeTab, setActiveTab] = useState('login');
   
   // Login state
@@ -35,12 +41,10 @@ export default function AuthPage() {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      const from = (location.state as { from?: Location })?.from;
-      const redirectTo = from?.pathname || '/account';
-      navigate(redirectTo, { replace: true });
+    if (isAuthenticated && user) {
+      navigate(getRedirectPath(user), { replace: true });
     }
-  }, [isAuthenticated, navigate, location]);
+  }, [isAuthenticated, user, navigate]);
 
   // Show auth errors
   useEffect(() => {
@@ -76,9 +80,8 @@ export default function AuthPage() {
     try {
       await login(result.data.email, result.data.password);
       toast.success('Вы успешно вошли в систему!');
-      const from = (location.state as { from?: Location })?.from;
-      const redirectTo = from?.pathname || '/account';
-      navigate(redirectTo, { replace: true });
+      const loggedInUser = useAuthStore.getState().user;
+      navigate(getRedirectPath(loggedInUser), { replace: true });
     } catch (error) {
       // Error is handled by store and shown via toast
       setLoginErrors({
@@ -118,7 +121,7 @@ export default function AuthPage() {
     try {
       await register(result.data.name, result.data.email, result.data.password, result.data.confirmPassword);
       toast.success('Регистрация успешна! Добро пожаловать!');
-      navigate('/account', { replace: true });
+      navigate('/', { replace: true });
     } catch (error) {
       // Error is handled by store and shown via toast
     } finally {
@@ -208,6 +211,17 @@ export default function AuthPage() {
                       {isSubmitting || authLoading ? 'Вход...' : 'Войти'}
                     </Button>
                   </form>
+
+                  {config.enableMockData && (
+                    <div className="mt-6 pt-4 border-t border-border">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Демо-доступ (mock)</p>
+                      <div className="text-xs text-muted-foreground space-y-1 font-mono">
+                        <div>Admin: admin@zvezda.ru / admin123</div>
+                        <div>Support: support@zvezda.ru / support123</div>
+                        <div>User: user@example.com / user123</div>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="mt-6 text-center">
                     <p className="text-sm text-muted-foreground">

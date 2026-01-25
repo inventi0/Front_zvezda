@@ -9,17 +9,17 @@ import { useAuthStore } from '@/app/stores/auth.store';
 export function useAuth() {
   const store = useAuthStore();
 
-  // Check auth on mount
   useEffect(() => {
-    if (!store.isAuthenticated && !store.isLoading) {
+    if (!store.isAuthenticated && !store.isLoading && store.tokens) {
       store.checkAuth();
     }
-  }, [store.isAuthenticated, store.isLoading, store.checkAuth]);
+  }, [store]);
 
   return {
     user: store.user,
     isAuthenticated: store.isAuthenticated,
     isAdmin: store.isAdmin,
+    isSupport: store.isSupport,
     isLoading: store.isLoading,
     error: store.error,
     login: store.login,

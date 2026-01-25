@@ -10,13 +10,18 @@ import { Loader2 } from 'lucide-react';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  /** Support: только тикеты/переписка. Admin: всё. Для /admin/support разрешены оба. */
+  requireAdminOrSupport?: boolean;
 }
 
-export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
+export function ProtectedRoute({
+  children,
+  requireAdmin = false,
+  requireAdminOrSupport = false,
+}: ProtectedRouteProps) {
   const location = useLocation();
-  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isSupport, isLoading } = useAuth();
 
-  // Show loading while checking auth
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -25,13 +30,13 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
     );
   }
 
-  // Redirect to login if not authenticated
   if (!isAuthenticated) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Redirect to account if not admin but admin required
-  if (requireAdmin && !isAdmin) {
+  if (requireAdminOrSupport) {
+    if (!isAdmin && !isSupport) return <Navigate to="/account" replace />;
+  } else if (requireAdmin && !isAdmin) {
     return <Navigate to="/account" replace />;
   }
 

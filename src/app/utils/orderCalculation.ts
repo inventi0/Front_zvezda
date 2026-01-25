@@ -4,6 +4,7 @@
  */
 
 import type { OrderCalculation } from '@/app/types';
+import type { Product } from '@/app/types';
 import { config } from '@/app/config/env';
 
 // Источник истины комиссии — конфиг, который в реальной системе приходит с backend
@@ -64,4 +65,55 @@ export function formatPrice(amount: number, currency: string = 'RUB'): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+/** Result of seller income calculation. */
+export interface SellerIncomeResult {
+  /** Amount buyer pays (basePrice + commission). */
+  buyerTotal: number;
+  /** Commission taken by platform. */
+  commission: number;
+  /** Commission as fraction (e.g. 0.1 = 10%). */
+  commissionPercent: number;
+  /** Amount seller receives (basePrice). "Ты получаешь X". */
+  sellerIncome: number;
+}
+
+/**
+ * Calculate seller income. Pure function, no backend.
+ * Seller receives basePrice; platform takes commission.
+ *
+ * @param basePrice - Sale amount (e.g. denomination price)
+ * @param commissionPercent - Commission as fraction (default from config)
+ * @returns Seller income, commission, buyer total
+ */
+export function sellerIncomeCalculator(
+  basePrice: number,
+  commissionPercent: number = COMMISSION_PERCENT
+): SellerIncomeResult {
+  const commission = Math.round(basePrice * commissionPercent);
+  const buyerTotal = basePrice + commission;
+
+  return {
+    buyerTotal,
+    commission,
+    commissionPercent,
+    sellerIncome: basePrice,
+  };
+}
+
+const CUSTOM_AMOUNT_MIN = 10;
+const CUSTOM_AMOUNT_MAX = 999_999;
+
+/** Лимиты своей суммы: от 10 ₽ до 999 999 ₽. В UI показываем только минимум. */
+export function getCustomAmountLimits(_product?: Product): { min: number; max: number } {
+  return { min: CUSTOM_AMOUNT_MIN, max: CUSTOM_AMOUNT_MAX };
+}
+
+/** Compute price (₽) for custom top-up amount using product's min price-per-unit rate. */
+export function computeCustomPrice(amount: number, product: Product): number {
+  const denoms = product.denominations;
+  if (!denoms.length) return amount;
+  const rate = Math.min(...denoms.map((d) => d.price / d.amount));
+  return Math.round(amount * rate);
 }

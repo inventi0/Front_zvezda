@@ -3,6 +3,8 @@
  * Centralized configuration management
  */
 
+import { logger } from '@/app/utils/logger';
+
 interface AppConfig {
   apiUrl: string;
   apiTimeout: number;
@@ -85,8 +87,6 @@ export const config: AppConfig = {
 /**
  * Validate configuration on app startup
  */
-import { logger } from '@/app/utils/logger';
-
 export const validateConfig = (): void => {
   if (!config.apiUrl) {
     logger.warn('API URL is not set. Using relative path.');
