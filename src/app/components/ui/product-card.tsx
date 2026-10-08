@@ -1,9 +1,12 @@
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import type { Variants } from "motion/react";
 import { useState, memo } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Star } from "lucide-react";
+import { getDeliveryEstimateLabel } from "@/app/domain/productFulfillment";
+import type { ProductFulfillment } from "@/app/types";
 interface ProductCardProps {
   id: string;
   slug: string;
@@ -11,8 +14,7 @@ interface ProductCardProps {
   image: string;
   logo: string;
   price: number;
-  deliveryTimeText: string;
-  deliverySpeed: "instant" | "fast" | "manual";
+  fulfillment: ProductFulfillment;
   popular?: boolean;
   enableAnimations?: boolean;
   /** Optional: trust layer. Show rating when provided. */
@@ -27,8 +29,7 @@ function ProductCardComponent({
   image,
   logo: _logo,
   price,
-  deliveryTimeText,
-  deliverySpeed,
+  fulfillment,
   popular = false,
   enableAnimations = true,
   rating,
@@ -38,7 +39,7 @@ function ProductCardComponent({
   const shouldReduceMotion = useReducedMotion();
   const shouldAnimate = enableAnimations && !shouldReduceMotion;
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: {
       opacity: 0,
       y: 20,
@@ -56,7 +57,7 @@ function ProductCardComponent({
     },
   };
 
-  const imageVariants = {
+  const imageVariants: Variants = {
     hidden: {
       opacity: 0,
       scale: 1.1,
@@ -72,7 +73,7 @@ function ProductCardComponent({
     },
   };
 
-  const contentVariants = {
+  const contentVariants: Variants = {
     hidden: {
       opacity: 0,
       y: 10,
@@ -89,7 +90,7 @@ function ProductCardComponent({
     },
   };
 
-  const badgeVariants = {
+  const badgeVariants: Variants = {
     hidden: {
       opacity: 0,
       scale: 0.9,
@@ -106,8 +107,8 @@ function ProductCardComponent({
   };
 
   const getBadgeVariant = () => {
-    if (deliverySpeed === "instant") return "default";
-    if (deliverySpeed === "fast") return "secondary";
+    if (fulfillment.estimate === "instant") return "default";
+    if (fulfillment.estimate !== "manual-review") return "secondary";
     return "outline";
   };
 
@@ -227,7 +228,7 @@ function ProductCardComponent({
               </motion.span>
               <motion.div variants={shouldAnimate ? badgeVariants : {}}>
                 <Badge variant={getBadgeVariant()} className="text-xs">
-                  {deliveryTimeText}
+                  {getDeliveryEstimateLabel(fulfillment.estimate)}
                 </Badge>
               </motion.div>
             </div>
@@ -245,8 +246,9 @@ export const ProductCard = memo(ProductCardComponent, (prevProps, nextProps) => 
     prevProps.id === nextProps.id &&
     prevProps.price === nextProps.price &&
     prevProps.popular === nextProps.popular &&
-    prevProps.deliverySpeed === nextProps.deliverySpeed &&
-    prevProps.deliveryTimeText === nextProps.deliveryTimeText &&
+    prevProps.fulfillment.type === nextProps.fulfillment.type &&
+    prevProps.fulfillment.channel === nextProps.fulfillment.channel &&
+    prevProps.fulfillment.estimate === nextProps.fulfillment.estimate &&
     prevProps.name === nextProps.name &&
     prevProps.slug === nextProps.slug &&
     prevProps.rating === nextProps.rating &&

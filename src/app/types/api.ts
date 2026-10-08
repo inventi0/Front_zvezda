@@ -62,6 +62,8 @@ export interface GetProductBySlugResponse {
 export interface CreateOrderRequest {
   productId: string;
   denominationId: string;
+  /** Required for products whose denominations are split into variants. */
+  optionId?: string;
   email: string;
   accountId?: string;
   region?: string;

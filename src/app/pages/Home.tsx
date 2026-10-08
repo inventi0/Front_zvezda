@@ -3,11 +3,10 @@ import { motion } from 'motion/react';
 import kubikImage from '@/app/assets/element/kubik.svg?url';
 import fonVerhImage from '@/app/assets/images/фон_верх01.png?url';
 import { useNavigate } from 'react-router-dom';
-import { Star, CreditCard, ClipboardList, Clock, Filter, ChevronDown } from 'lucide-react';
+import { ChevronDown, Filter } from 'lucide-react';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import { Button } from '@/app/components/ui/button';
-import { Card, CardContent } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import {
@@ -19,23 +18,31 @@ import {
 } from '@/app/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { ProductCard } from '@/app/components/ui/product-card';
+import {
+  getQuickCheckoutProducts,
+  supportsCustomQuickCheckoutAmount,
+} from '@/app/domain/quickCheckout';
 import { useProducts } from '@/app/hooks/useProducts';
 import type { ProductCategory } from '@/app/types';
 import { quickCheckoutSchema } from '@/app/utils/schemas';
 import { getProductImage, getProductLogo } from '@/app/utils/productAssets';
 import { toast } from 'sonner';
 import { cn } from '@/app/components/ui/utils';
-import { calculateOrderTotal, getCustomAmountLimits, computeCustomPrice } from '@/app/utils/orderCalculation';
+import {
+  calculateOrderTotal,
+  computeCustomPrice,
+  formatPrice,
+  getCustomAmountLimits,
+} from '@/app/utils/orderCalculation';
 import { storeCheckoutData } from '@/app/utils/checkoutStorage';
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [selectedProduct, setSelectedProduct] = useState('1');
+  const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedAmount, setSelectedAmount] = useState('');
   const [customAmount, setCustomAmount] = useState('');
   const [accountId, setAccountId] = useState('');
-  const [email, setEmail] = useState('');
-  const [errors, setErrors] = useState<{ email?: string; accountId?: string; amount?: string }>({});
+  const [errors, setErrors] = useState<{ accountId?: string; amount?: string }>({});
   const [catalogCategory, setCatalogCategory] = useState<ProductCategory | 'all'>('all');
   const [catalogSort, setCatalogSort] = useState<'popular' | 'price-asc' | 'price-desc'>('popular');
   const [balanceBtnBounce, setBalanceBtnBounce] = useState(false);
@@ -68,16 +75,25 @@ export default function HomePage() {
     });
   }, []);
 
-  const { products: popularProducts } = useProducts({ popular: true });
+  const quickCheckoutProducts = useMemo(() => getQuickCheckoutProducts(allProducts), [allProducts]);
 
   const product = useMemo(() => {
-    const found = allProducts.find(p => p.id === selectedProduct);
-    // Fallback to first product if selected not found
-    if (!found && allProducts.length > 0 && !productsLoading) {
-      return allProducts[0];
-    }
-    return found;
-  }, [allProducts, selectedProduct, productsLoading]);
+    return quickCheckoutProducts.find((item) => item.id === selectedProduct);
+  }, [quickCheckoutProducts, selectedProduct]);
+  const allowCustomAmount = supportsCustomQuickCheckoutAmount(product);
+
+  useEffect(() => {
+    if (productsLoading) return;
+
+    const selectedIsAvailable = quickCheckoutProducts.some((item) => item.id === selectedProduct);
+    if (selectedIsAvailable) return;
+
+    setSelectedProduct(quickCheckoutProducts[0]?.id ?? '');
+    setSelectedAmount('');
+    setCustomAmount('');
+    setAccountId('');
+    setErrors({});
+  }, [productsLoading, quickCheckoutProducts, selectedProduct]);
 
   const catalogCategories = useMemo(() => {
     const cats: ProductCategory[] = ['games', 'subscriptions', 'wallet', 'services'];
@@ -85,35 +101,52 @@ export default function HomePage() {
       { value: 'all' as const, label: 'Все товары', count: allProducts.length },
       ...cats.map((c) => ({
         value: c,
-        label: c === 'games' ? 'Игры' : c === 'subscriptions' ? 'Подписки' : c === 'wallet' ? 'Подарочные карты' : 'Сервисы',
+        label:
+          c === 'games'
+            ? 'Игры'
+            : c === 'subscriptions'
+              ? 'Подписки'
+              : c === 'wallet'
+                ? 'Подарочные карты'
+                : 'Сервисы',
         count: allProducts.filter((p) => p.category === c).length,
       })),
     ];
   }, [allProducts]);
 
   const filteredCatalog = useMemo(() => {
-    let list = catalogCategory === 'all'
-      ? [...allProducts]
-      : allProducts.filter((p) => p.category === catalogCategory);
+    const minimumPrice = (item: (typeof allProducts)[number]) =>
+      item.denominations.length
+        ? Math.min(...item.denominations.map((denomination) => denomination.price))
+        : 0;
+    let list =
+      catalogCategory === 'all'
+        ? [...allProducts]
+        : allProducts.filter((p) => p.category === catalogCategory);
     if (catalogSort === 'popular') {
       list = [...list].sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0));
     } else if (catalogSort === 'price-asc') {
-      list = [...list].sort((a, b) => (a.denominations[0]?.price ?? 0) - (b.denominations[0]?.price ?? 0));
+      list = [...list].sort((a, b) => minimumPrice(a) - minimumPrice(b));
     } else {
-      list = [...list].sort((a, b) => (b.denominations[0]?.price ?? 0) - (a.denominations[0]?.price ?? 0));
+      list = [...list].sort((a, b) => minimumPrice(b) - minimumPrice(a));
     }
     return list;
   }, [allProducts, catalogCategory, catalogSort]);
 
-  const handleProductChange = useCallback((value: string) => {
-    setSelectedProduct(value);
-    setSelectedAmount('');
-    setCustomAmount('');
-    setErrors((prev) => ({ ...prev, amount: undefined }));
-  }, []);
+  const handleProductChange = useCallback(
+    (value: string) => {
+      if (value === selectedProduct) return;
+      setSelectedProduct(value);
+      setSelectedAmount('');
+      setCustomAmount('');
+      setAccountId('');
+      setErrors((prev) => ({ ...prev, accountId: undefined, amount: undefined }));
+    },
+    [selectedProduct]
+  );
 
   const handleAmountSelect = useCallback((value: string) => {
-    setSelectedAmount(value);
+    setSelectedAmount((current) => (current === value ? '' : value));
     setCustomAmount('');
     setErrors((prev) => ({ ...prev, amount: undefined }));
   }, []);
@@ -135,31 +168,32 @@ export default function HomePage() {
     }
 
     const { min, max } = getCustomAmountLimits(product);
-    const useCustom = customAmount.trim() !== '';
+    const useCustom = allowCustomAmount && customAmount.trim() !== '';
     const customNum = useCustom ? parseInt(customAmount.replace(/\D/g, ''), 10) : 0;
-    const validCustom = useCustom && !Number.isNaN(customNum) && customNum >= min && customNum <= max;
+    const validCustom =
+      useCustom && !Number.isNaN(customNum) && customNum >= min && customNum <= max;
 
-    const schema = quickCheckoutSchema(product.type);
+    const schema = quickCheckoutSchema(product.type, false);
     const result = schema.safeParse({
-      email,
       accountId: product.type === 'top-up' ? accountId : undefined,
       denominationId: validCustom ? 'custom' : selectedAmount,
     });
 
     if (!result.success) {
-      const fieldErrors: { email?: string; accountId?: string; amount?: string } = {};
+      const fieldErrors: { accountId?: string; amount?: string } = {};
       result.error.errors.forEach((err) => {
         const pathKey = err.path[0] as string;
         if (pathKey === 'denominationId') {
           if (!(useCustom && !validCustom)) fieldErrors.amount = err.message;
-        } else if (pathKey === 'email' || pathKey === 'accountId' || pathKey === 'amount') {
+        } else if (pathKey === 'accountId' || pathKey === 'amount') {
           fieldErrors[pathKey] = err.message;
         }
       });
       if (useCustom && !validCustom && !fieldErrors.amount) {
         if (Number.isNaN(customNum)) fieldErrors.amount = 'Введите число';
-        else if (customNum < min) fieldErrors.amount = `От ${min} ₽`;
-        else fieldErrors.amount = 'Сумма превышает допустимую';
+        else if (customNum < min) {
+          fieldErrors.amount = product.slug === 'telegram-stars' ? `От ${min} ★` : `От ${min} ₽`;
+        } else fieldErrors.amount = 'Сумма превышает допустимую';
       }
       setErrors(fieldErrors);
       toast.error('Пожалуйста, исправьте ошибки в форме');
@@ -171,13 +205,12 @@ export default function HomePage() {
       storeCheckoutData({
         productId: selectedProduct,
         denominationId: 'custom',
-        email: result.data.email,
         accountId: result.data.accountId,
         customAmount: customNum,
         customPrice,
       });
     } else {
-      const selectedDenom = product.denominations.find(d => d.id === selectedAmount);
+      const selectedDenom = product.denominations.find((d) => d.id === selectedAmount);
       if (!selectedDenom) {
         setErrors((e) => ({ ...e, amount: 'Выберите сумму или введите свою' }));
         toast.error('Выберите сумму или введите свою');
@@ -186,27 +219,42 @@ export default function HomePage() {
       storeCheckoutData({
         productId: selectedProduct,
         denominationId: selectedAmount,
-        email: result.data.email,
         accountId: result.data.accountId,
       });
     }
 
     toast.success('Переход к оформлению заказа...');
     navigate(`/checkout?productId=${selectedProduct}`);
-  }, [email, selectedAmount, customAmount, product, accountId, selectedProduct, navigate]);
+  }, [
+    accountId,
+    allowCustomAmount,
+    customAmount,
+    navigate,
+    product,
+    selectedAmount,
+    selectedProduct,
+  ]);
 
   const { hasValidAmount, basePriceForSummary } = useMemo(() => {
     if (!product) return { hasValidAmount: false, basePriceForSummary: 0 };
     const { min, max } = getCustomAmountLimits(product);
     const denom = product.denominations.find((d) => d.id === selectedAmount);
     if (denom) return { hasValidAmount: true, basePriceForSummary: denom.price };
-    const n = parseInt(customAmount.replace(/\D/g, ''), 10);
+    const n = allowCustomAmount ? parseInt(customAmount.replace(/\D/g, ''), 10) : Number.NaN;
     const valid = !Number.isNaN(n) && n >= min && n <= max;
     return {
       hasValidAmount: valid,
       basePriceForSummary: valid ? computeCustomPrice(n, product) : 0,
     };
-  }, [product, selectedAmount, customAmount]);
+  }, [allowCustomAmount, customAmount, product, selectedAmount]);
+
+  const quickCheckoutTotal = useMemo(
+    () =>
+      hasValidAmount && basePriceForSummary > 0
+        ? calculateOrderTotal(basePriceForSummary).total
+        : 0,
+    [basePriceForSummary, hasValidAmount]
+  );
 
   return (
     <div className="flex flex-col min-h-screen relative bg-background">
@@ -224,9 +272,8 @@ export default function HomePage() {
       />
       <Header />
       <main className="flex-1 relative overflow-x-hidden min-h-screen z-10">
-
         {/* Hero: зелёный фон по высоте текста; кубик absolute, те же размеры, выходит за границы зелёного */}
-        <div className="w-full overflow-visible relative z-10 -mt-[calc(0.5rem+3.5rem)] sm:-mt-[calc(0.5rem+4rem)] min-h-0 pt-32 sm:pt-36 md:pt-40 lg:pt-88 xl:pt-[28rem] 2xl:pt-[32rem] pb-10 sm:pb-12 lg:pb-1">
+        <div className="relative z-10 -mt-16 min-h-0 w-full overflow-visible pb-10 pt-32 sm:pb-12 sm:pt-36 md:pt-40 lg:pb-1 lg:pt-88 xl:pt-[28rem] 2xl:pt-[32rem]">
           <div className="container mx-auto max-w-7xl px-5 sm:px-8 md:px-10 lg:px-12 xl:px-16 relative overflow-visible z-10">
             {/* Зелёный блок — на адаптиве: кнопка слева (~1/3) + текст справа (~2/3); lg+: только текст, кубик absolute */}
             <div className="relative rounded-2xl overflow-hidden w-full flex bg-[#83A393] border border-border">
@@ -235,7 +282,11 @@ export default function HomePage() {
                 <div className="w-1/3 min-w-[100px] max-w-[160px] shrink-0 p-2.5 flex items-stretch">
                   <button
                     type="button"
-                    onClick={() => document.getElementById('quick-checkout')?.scrollIntoView({ behavior: 'smooth' })}
+                    onClick={() =>
+                      document
+                        .getElementById('quick-checkout')
+                        ?.scrollIntoView({ behavior: 'smooth' })
+                    }
                     className="w-full flex items-center justify-center rounded-[6px] bg-[#274D31] text-white font-semibold text-xs sm:text-sm px-3 py-2.5 hover:bg-[#1e3d28] active:opacity-95 transition-colors"
                   >
                     Залить баланс
@@ -243,7 +294,9 @@ export default function HomePage() {
                 </div>
                 <div className="flex-1 flex flex-col justify-center items-start text-left px-4 sm:px-5 py-4 sm:py-5 min-w-0">
                   <h1 className="text-white font-bold leading-tight text-base sm:text-lg md:text-xl">
-                    ЦИФРОВОЙ МАРКЕТПЛЕЙС<br />сервисов и внутриигровых товаров
+                    ЦИФРОВОЙ МАРКЕТПЛЕЙС
+                    <br />
+                    сервисов и внутриигровых товаров
                   </h1>
                   <p className="text-white/95 text-xs sm:text-sm md:text-base mt-1 sm:mt-2">
                     Мы уже готовы пополнить твой Steam по выгодному курсу
@@ -254,7 +307,9 @@ export default function HomePage() {
               <div className="hidden lg:flex flex-1 justify-end">
                 <div className="relative flex flex-col items-stretch text-right px-6 md:px-8 lg:px-10 xl:px-12 lg:pl-[38%] py-4 sm:py-5 md:py-6">
                   <h1 className="text-white font-bold leading-tight text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-[2.25rem]">
-                    ЦИФРОВОЙ МАРКЕТПЛЕЙС<br />сервисов и внутриигровых товаров
+                    ЦИФРОВОЙ МАРКЕТПЛЕЙС
+                    <br />
+                    сервисов и внутриигровых товаров
                   </h1>
                   <p className="text-white/95 text-xs sm:text-sm md:text-base lg:text-lg mt-1 sm:mt-2">
                     Мы уже готовы пополнить твой Steam по выгодному курсу
@@ -273,11 +328,7 @@ export default function HomePage() {
                   ease: 'easeInOut',
                 }}
               >
-                <img
-                  src={kubikImage}
-                  alt=""
-                  className="w-full h-auto object-contain"
-                />
+                <img src={kubikImage} alt="" className="w-full h-auto object-contain" />
               </motion.div>
             </div>
           </div>
@@ -309,327 +360,159 @@ export default function HomePage() {
           </motion.div>
         </div>
 
-        {/* Секция: bento «Инструкция» слева, форма быстрого пополнения справа */}
-        <section id="quick-checkout" className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 md:pt-6 lg:pt-10 pb-0 relative z-10 scroll-mt-24">
-          <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-10 items-start">
-            {/* Слева — bento «Инструкция» (как на референсе) */}
-            <div className="order-2 lg:order-1 mt-4 sm:mt-8 lg:mt-16">
-              <div
-                className={cn(
-                  'relative grid grid-cols-2 gap-2 sm:gap-3 rounded-2xl p-2 sm:p-3 transition-resize',
-                  'bg-muted/30 border border-border',
-                  'min-h-[280px] sm:min-h-[320px]'
-                )}
-              >
-                <h2 className="col-span-2 text-xl sm:text-2xl font-bold px-2 sm:px-3 pt-1 pb-1 sm:pb-2">
-                  Инструкция
-                </h2>
-                {/* Шаг 1 — высокая левая карточка (как Real-time Analytics) */}
-                <div
-                  className={cn(
-                    'col-span-1 row-span-2 flex flex-col rounded-xl sm:rounded-2xl p-4 sm:p-5',
-                    'bg-card/95 border border-border shadow-sm',
-                    'hover:border-primary/20 hover:shadow-md transition-all duration-300 ease-out'
-                  )}
-                >
-                  <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 overflow-hidden mb-3 sm:mb-4">
-                    {product ? (
-                      <img
-                        src={getProductLogo(product.slug)}
-                        alt=""
-                        className="h-6 w-6 sm:h-8 sm:w-8 object-contain"
-                      />
-                    ) : (
-                      <span className="text-primary font-bold text-lg sm:text-xl">1</span>
-                    )}
-                  </div>
-                  <h3 className="font-bold text-base sm:text-lg text-foreground mb-1.5">
-                    Узнайте ID или имя аккаунта
-                  </h3>
-                  {(() => {
-                    const isTopUp = product?.type === 'top-up';
-                    const hasHint = isTopUp && !!product?.instructions;
-                    const isNoId = product && !isTopUp;
-                    // Параграф только если нет товара — подсказка всегда в блоке
-                    if (hasHint || isNoId || (product && isTopUp)) return null;
-                    return (
-                      <p className="text-xs sm:text-sm text-muted-foreground leading-snug flex-1">
-                        Выберите товар в форме справа — здесь появится подсказка для вашей платформы.
-                      </p>
-                    );
-                  })()}
-                  <div
+        {/* Компактное быстрое пополнение: только поддерживаемые прямые услуги */}
+        <section
+          id="quick-checkout"
+          className="container relative z-10 mx-auto max-w-7xl scroll-mt-24 px-4 pb-0 pt-8 sm:px-6 sm:pt-10 lg:px-8"
+        >
+          <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+            <p className="text-sm text-muted-foreground">Пополнение сервисов</p>
+
+            <div
+              className="mt-1 flex gap-5 overflow-x-auto border-b"
+              role="tablist"
+              aria-label="Сервис пополнения"
+            >
+              {quickCheckoutProducts.map((item) => {
+                const selected = selectedProduct === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => handleProductChange(item.id)}
                     className={cn(
-                      'mt-3 sm:mt-4 min-h-12 sm:min-h-14 rounded-lg bg-muted/50 border border-dashed border-border flex items-center justify-center px-3 py-2 sm:px-4 sm:py-3 transition-resize',
-                      product ? 'flex-1 min-h-0' : undefined
+                      'relative flex min-h-10 shrink-0 items-center gap-2 border-b-2 px-0.5 py-2 text-base font-semibold transition-colors',
+                      selected
+                        ? 'border-foreground text-foreground'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
                     )}
                   >
-                    <span className="text-[10px] sm:text-xs text-muted-foreground text-center leading-snug">
-                      {product?.type === 'top-up' && product?.instructions
-                        ? <>Подсказка: {product.instructions}</>
-                        : product && product.type !== 'top-up'
-                          ? 'ID аккаунта не требуется. Только email и номинал.'
-                          : product?.type === 'top-up'
-                            ? 'Подсказка: ID обычно в настройках аккаунта или в профиле игры. Укажите его в форме справа.'
-                            : 'Выберите товар справа → подсказка появится здесь'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Шаг 2 — средняя карточка справа сверху (как Global CDN) */}
-                <div
-                  className={cn(
-                    'rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col',
-                    'bg-card/95 border border-border shadow-sm',
-                    'hover:border-primary/20 hover:shadow-md transition-all duration-300 ease-out'
-                  )}
-                >
-                  <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary mb-2">
-                    <ClipboardList className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-                  </div>
-                  <h3 className="font-bold text-sm sm:text-base text-foreground mb-1">
-                    Заполните форму
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-snug">
-                    {product?.type === 'top-up'
-                      ? 'Укажите ID аккаунта, сумму пополнения и email.'
-                      : product && (product.type === 'voucher' || product.type === 'gift-card')
-                        ? 'Укажите email и выберите номинал.'
-                        : 'Выберите товар справа, затем заполните форму.'}
-                  </p>
-                </div>
-
-                {/* Шаг 3 — средняя карточка справа снизу (как Secure Auth) */}
-                <div
-                  className={cn(
-                    'rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col',
-                    'bg-card/95 border border-border shadow-sm',
-                    'hover:border-primary/20 hover:shadow-md transition-all duration-300 ease-out'
-                  )}
-                >
-                  <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary mb-2">
-                    <CreditCard className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-                  </div>
-                  <h3 className="font-bold text-sm sm:text-base text-foreground mb-1">
-                    Оплатите картой или СБП
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-snug">
-                    Мы зачислим средства на ваш баланс практически сразу.
-                  </p>
-                </div>
-
-                {/* Нижняя полоска на всю ширину */}
-                <div
-                  className={cn(
-                    'col-span-2 rounded-xl sm:rounded-2xl px-4 py-3 sm:px-5 sm:py-3.5 transition-resize',
-                    'bg-card/95 border border-border',
-                    'flex items-center justify-center gap-3 sm:gap-4 flex-wrap'
-                  )}
-                >
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
-                    <Star className="h-4 w-4 text-primary" />
-                    Без регистрации
-                  </span>
-                  <span className="text-border">|</span>
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4 text-primary" />
-                    Поддержка 24/7
-                  </span>
-                </div>
-              </div>
+                    <img
+                      src={item.logo || getProductLogo(item.slug)}
+                      alt=""
+                      className="h-5 w-5 shrink-0 object-contain"
+                    />
+                    <span>{item.slug === 'steam-wallet' ? 'Steam' : 'Telegram Stars'}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Справа — быстрое пополнение */}
-            <div className="order-1 lg:order-2 mt-4 sm:mt-8 lg:mt-16">
-            <Card className="border-2 shadow-2xl w-full">
-              <CardContent className="p-4 sm:p-6">
-                <div className="mb-7">
-                  <h3 className="text-2xl md:text-3xl font-bold mb-2 tracking-tight">Быстрое пополнение</h3>
-                  <p className="text-sm md:text-base text-muted-foreground">
-                    Выберите товар, введите данные и оплатите
+            {productsLoading ? (
+              <p className="py-6 text-sm text-muted-foreground">
+                Загрузка доступных способов пополнения...
+              </p>
+            ) : product ? (
+              <div className="grid gap-4 pt-4 lg:grid-cols-[minmax(250px,0.9fr)_minmax(310px,1.2fr)_minmax(220px,0.75fr)] lg:items-start">
+                <fieldset className="min-w-0">
+                  <legend className="h-5 text-sm font-medium leading-5">
+                    {allowCustomAmount ? 'Сумма пополнения' : 'Количество звёзд'}
+                  </legend>
+
+                  {allowCustomAmount ? (
+                    <div className="relative mt-2">
+                      <Input
+                        id="quick-custom-amount"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={
+                          product.slug === 'telegram-stars'
+                            ? `Количество от ${getCustomAmountLimits(product).min}`
+                            : `Своя сумма от ${getCustomAmountLimits(product).min}`
+                        }
+                        value={customAmount}
+                        onChange={(event) => handleCustomAmountChange(event.target.value)}
+                        className="h-11 bg-muted/40 pr-10"
+                        aria-invalid={Boolean(errors.amount)}
+                      />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                        {product.slug === 'telegram-stars' ? '★' : '₽'}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {product.denominations.map((denomination) => {
+                      const selected = selectedAmount === denomination.id;
+                      return (
+                        <button
+                          key={denomination.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => handleAmountSelect(denomination.id)}
+                          className={cn(
+                            'min-h-9 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'bg-background hover:border-primary/40 hover:bg-muted/40'
+                          )}
+                        >
+                          {denomination.currency === 'Stars'
+                            ? `${denomination.amount.toLocaleString('ru-RU')} ★`
+                            : formatPrice(denomination.amount)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {errors.amount ? (
+                    <p className="mt-2 text-xs text-destructive">{errors.amount}</p>
+                  ) : null}
+                </fieldset>
+
+                <div className="min-w-0">
+                  <Label htmlFor="quick-account-id" className="h-5 leading-5">
+                    {product.slug === 'telegram-stars'
+                      ? 'Имя пользователя Telegram'
+                      : 'Steam ID или имя аккаунта'}
+                  </Label>
+                  <Input
+                    id="quick-account-id"
+                    value={accountId}
+                    onChange={(event) => {
+                      setAccountId(event.target.value);
+                      setErrors((current) => ({ ...current, accountId: undefined }));
+                    }}
+                    placeholder={product.slug === 'telegram-stars' ? 'username' : 'steamuser123'}
+                    className="mt-2 h-11 bg-muted/40"
+                    aria-invalid={Boolean(errors.accountId)}
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {product.slug === 'telegram-stars'
+                      ? 'Укажите username без символа @.'
+                      : 'Данные можно проверить в профиле Steam.'}
                   </p>
+                  {errors.accountId ? (
+                    <p className="mt-2 text-xs text-destructive">{errors.accountId}</p>
+                  ) : null}
                 </div>
 
-                <div className="space-y-5">
-                  {/* Product Selection */}
-                  <div className="space-y-2">
-                    <Label htmlFor="product">Выберите товар</Label>
-                    <Select
-                      value={selectedProduct}
-                      onValueChange={handleProductChange}
-                    >
-                      <SelectTrigger id="product" className="ring-1 ring-primary/10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {popularProducts.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            <span className="flex items-center gap-2">
-                              <img 
-                                src={getProductLogo(p.slug)} 
-                                alt={`${p.name} logo`}
-                                className="w-5 h-5 object-contain"
-                              />
-                              {p.name}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Amount Selection — плавное появление/скрытие */}
-                  <div
-                    className={cn(
-                      "overflow-hidden transition-all duration-300 ease-out",
-                      product ? "max-h-64 opacity-100 p-1" : "max-h-0 opacity-0"
-                    )}
-                  >
-                    {product && (
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="amount">Сумма</Label>
-                          <Select value={selectedAmount} onValueChange={handleAmountSelect}>
-                            <SelectTrigger id="amount" className="ring-1 ring-primary/10">
-                              <SelectValue placeholder="Выберите сумму" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {product.denominations.map((denom) => (
-                                <SelectItem key={denom.id} value={denom.id}>
-                                  {denom.amount} {denom.currency} — {denom.price} ₽
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="customAmount">Или введите свою сумму</Label>
-                          <Input
-                            id="customAmount"
-                            type="text"
-                            inputMode="numeric"
-                            placeholder={`От ${getCustomAmountLimits(product).min} ₽`}
-                            value={customAmount}
-                            onChange={(e) => handleCustomAmountChange(e.target.value)}
-                            className="bg-muted/20 ring-1 ring-border border-border"
-                            aria-invalid={!!errors.amount}
-                          />
-                        </div>
-                        {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Account ID block — всегда на месте для стабильного layout */}
-                  <div className="space-y-2">
-                    <Label htmlFor="accountId">
-                      {product?.type === 'top-up'
-                        ? product.name === 'Steam Пополнение'
-                          ? 'Steam ID'
-                          : product.name === 'Telegram Stars'
-                            ? 'Telegram Username'
-                            : 'ID аккаунта'
-                        : 'Данные аккаунта'}
-                    </Label>
-                    <Input
-                      id="accountId"
-                      type="text"
-                      value={accountId}
-                      onChange={(e) => setAccountId(e.target.value)}
-                      placeholder={
-                        product?.type === 'top-up'
-                          ? product.name === 'Steam Пополнение'
-                            ? 'steamuser123'
-                            : product.name === 'Telegram Stars'
-                              ? 'username'
-                              : 'Введите ID'
-                          : 'Не требуется для этого товара'
-                      }
-                      className={cn(
-                        "bg-muted/20 ring-1 ring-border border-border",
-                        product?.type !== 'top-up' && "opacity-60 cursor-not-allowed"
-                      )}
-                      disabled={product?.type !== 'top-up'}
-                      aria-invalid={!!errors.accountId}
-                    />
-                    {errors.accountId && (
-                      <p className="text-red-500 text-xs mt-1">{errors.accountId}</p>
-                    )}
-                  </div>
-
-                  {/* Email */}
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="text"
-                      inputMode="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="your@email.com"
-                      className="bg-muted/20 ring-1 ring-border border-border"
-                      aria-invalid={!!errors.email}
-                    />
-                    {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-                  </div>
-
-                  {/* Price Summary (плавное появление/скрытие) */}
-                  <div
-                    className={cn(
-                      "overflow-hidden transition-all duration-300 ease-out",
-                      hasValidAmount && product
-                        ? "max-h-40 opacity-100 mt-4"
-                        : "max-h-0 opacity-0 mt-0",
-                    )}
-                  >
-                    {hasValidAmount && product && basePriceForSummary > 0 && (
-                      <div className="pt-4 border-t space-y-2">
-                        {(() => {
-                          const {
-                            commission,
-                            total,
-                            commissionPercent,
-                          } = calculateOrderTotal(basePriceForSummary);
-                          return (
-                            <>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">Сумма</span>
-                                <span>{basePriceForSummary} ₽</span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">
-                                  Комиссия ({Math.round(commissionPercent * 100)}%)
-                                </span>
-                                <span>{commission} ₽</span>
-                              </div>
-                              <div className="flex justify-between font-bold text-lg pt-2">
-                                <span>К оплате</span>
-                                <span className="text-primary">{total} ₽</span>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-
-                  <Button 
-                    className="w-full" 
-                    size="lg"
+                <div className="lg:pt-7">
+                  <Button
+                    className="h-11 w-full"
                     onClick={handleQuickCheckout}
-                    disabled={!hasValidAmount || !email || (product?.type === 'top-up' && !accountId)}
+                    disabled={!hasValidAmount || !accountId}
                   >
-                    Оплатить
+                    {hasValidAmount
+                      ? `К оформлению · ${formatPrice(quickCheckoutTotal)}`
+                      : 'Выберите сумму'}
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-            </div>
+              </div>
+            ) : (
+              <p className="py-6 text-sm text-muted-foreground">
+                Сейчас быстрое пополнение временно недоступно.
+              </p>
+            )}
           </div>
         </section>
 
         {/* Каталог — категории, фильтр, сетка товаров */}
-        <section id="catalog" className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-12 sm:pb-16 md:pb-20 relative z-10">
+        <section
+          id="catalog"
+          className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-12 sm:pb-16 md:pb-20 relative z-10"
+        >
           <h2 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">Каталог</h2>
 
           {/* Категории и сортировка */}
@@ -637,10 +520,17 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center sm:justify-between">
               {/* Категории — табы (десктоп) */}
               <div className="hidden md:block overflow-x-auto">
-                <Tabs value={catalogCategory} onValueChange={(v) => setCatalogCategory(v as ProductCategory | 'all')}>
+                <Tabs
+                  value={catalogCategory}
+                  onValueChange={(v) => setCatalogCategory(v as ProductCategory | 'all')}
+                >
                   <TabsList className="grid grid-cols-5 w-full min-w-max">
                     {catalogCategories.map((cat) => (
-                      <TabsTrigger key={cat.value} value={cat.value} className="text-xs sm:text-sm whitespace-nowrap">
+                      <TabsTrigger
+                        key={cat.value}
+                        value={cat.value}
+                        className="text-xs sm:text-sm whitespace-nowrap"
+                      >
                         {cat.label}
                         <span className="ml-1.5 text-xs text-muted-foreground">({cat.count})</span>
                       </TabsTrigger>
@@ -650,7 +540,10 @@ export default function HomePage() {
               </div>
               {/* Категории — селект (мобильный) */}
               <div className="md:hidden">
-                <Select value={catalogCategory} onValueChange={(v) => setCatalogCategory(v as ProductCategory | 'all')}>
+                <Select
+                  value={catalogCategory}
+                  onValueChange={(v) => setCatalogCategory(v as ProductCategory | 'all')}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Категория" />
                   </SelectTrigger>
@@ -664,7 +557,10 @@ export default function HomePage() {
                 </Select>
               </div>
               {/* Сортировка */}
-              <Select value={catalogSort} onValueChange={(v) => setCatalogSort(v as 'popular' | 'price-asc' | 'price-desc')}>
+              <Select
+                value={catalogSort}
+                onValueChange={(v) => setCatalogSort(v as 'popular' | 'price-asc' | 'price-desc')}
+              >
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <Filter className="h-4 w-4 mr-2 shrink-0" />
                   <SelectValue />
@@ -685,7 +581,13 @@ export default function HomePage() {
           ) : filteredCatalog.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-muted-foreground mb-4">Товары не найдены</p>
-              <Button variant="outline" onClick={() => { setCatalogCategory('all'); setCatalogSort('popular'); }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCatalogCategory('all');
+                  setCatalogSort('popular');
+                }}
+              >
                 Сбросить фильтры
               </Button>
             </div>
@@ -697,11 +599,14 @@ export default function HomePage() {
                   id={p.id}
                   slug={p.slug}
                   name={p.name}
-                  image={getProductImage(p.slug)}
-                  logo={getProductLogo(p.slug)}
-                  price={p.denominations[0]?.price || 0}
-                  deliveryTimeText={p.deliveryTimeText}
-                  deliverySpeed={p.deliverySpeed}
+                  image={p.image || getProductImage(p.slug)}
+                  logo={p.logo || getProductLogo(p.slug)}
+                  price={
+                    p.denominations.length
+                      ? Math.min(...p.denominations.map((item) => item.price))
+                      : 0
+                  }
+                  fulfillment={p.fulfillment}
                   popular={p.popular}
                   enableAnimations={true}
                   rating={p.rating}

@@ -27,10 +27,7 @@ export const accountIdSchema = (productType: ProductType) => {
     .max(100, 'ID слишком длинный');
 
   if (productType === 'top-up') {
-    return baseSchema.regex(
-      /^[a-zA-Z0-9_-]+$/,
-      'ID содержит недопустимые символы'
-    );
+    return baseSchema.regex(/^[a-zA-Z0-9_-]+$/, 'ID содержит недопустимые символы');
   }
 
   return baseSchema.optional();
@@ -88,9 +85,9 @@ export type RegisterFormData = z.infer<typeof registerSchema>;
 /**
  * Quick checkout form schema (Home page)
  */
-export const quickCheckoutSchema = (productType: ProductType) =>
+export const quickCheckoutSchema = (productType: ProductType, requireEmail = true) =>
   z.object({
-    email: emailSchema,
+    email: requireEmail ? emailSchema : z.string().optional(),
     accountId: accountIdSchema(productType),
     denominationId: z.string().min(1, 'Выберите сумму'),
   });
@@ -100,13 +97,22 @@ export type QuickCheckoutFormData = z.infer<ReturnType<typeof quickCheckoutSchem
 /**
  * Product checkout form schema (Product page)
  */
-export const productCheckoutSchema = (productType: ProductType, hasRegions: boolean, hasServers: boolean) => {
+export const productCheckoutSchema = (
+  productType: ProductType,
+  hasRegions: boolean,
+  hasServers: boolean,
+  hasOptions = false,
+  requireEmail = true
+) => {
   const baseSchema = z.object({
-    email: emailSchema,
+    email: requireEmail ? emailSchema : z.string().optional(),
     accountId: accountIdSchema(productType),
     denominationId: z.string().min(1, 'Выберите сумму'),
-    region: hasRegions ? z.string().min(1, 'Выберите регион') : z.string().optional(),
-    server: hasServers ? z.string().min(1, 'Выберите сервер') : z.string().optional(),
+    region: hasRegions
+      ? z.string().min(1, 'Выберите страну или регион аккаунта')
+      : z.string().optional(),
+    server: hasServers ? z.string().min(1, 'Выберите игровой сервер') : z.string().optional(),
+    optionId: hasOptions ? z.string().min(1, 'Выберите вариант') : z.string().optional(),
   });
 
   return baseSchema;
@@ -120,6 +126,7 @@ export type ProductCheckoutFormData = z.infer<ReturnType<typeof productCheckoutS
 export const createOrderSchema = z.object({
   productId: z.string().min(1, 'ID товара обязателен'),
   denominationId: z.string().min(1, 'ID номинала обязателен'),
+  optionId: z.string().optional(),
   email: emailSchema,
   accountId: z.string().optional(),
   region: z.string().optional(),
@@ -127,6 +134,8 @@ export const createOrderSchema = z.object({
   paymentMethod: z.enum(['card', 'sbp'], {
     required_error: 'Выберите способ оплаты',
   }),
+  customAmount: z.number().positive().optional(),
+  customPrice: z.number().positive().optional(),
 });
 
 export type CreateOrderFormData = z.infer<typeof createOrderSchema>;
@@ -136,8 +145,16 @@ export type CreateOrderFormData = z.infer<typeof createOrderSchema>;
  */
 export const supportTicketSchema = z.object({
   orderId: z.string().min(1, 'ID заказа обязателен'),
-  subject: z.string().min(1, 'Тема обязательна').min(5, 'Тема должна быть не менее 5 символов').max(200, 'Тема слишком длинная'),
-  description: z.string().min(1, 'Описание обязательно').min(10, 'Описание должно быть не менее 10 символов').max(2000, 'Описание слишком длинное'),
+  subject: z
+    .string()
+    .min(1, 'Тема обязательна')
+    .min(5, 'Тема должна быть не менее 5 символов')
+    .max(200, 'Тема слишком длинная'),
+  description: z
+    .string()
+    .min(1, 'Описание обязательно')
+    .min(10, 'Описание должно быть не менее 10 символов')
+    .max(2000, 'Описание слишком длинное'),
   type: z.enum(['payment', 'fulfillment', 'account', 'other'], {
     required_error: 'Выберите тип проблемы',
   }),

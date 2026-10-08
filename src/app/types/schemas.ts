@@ -4,13 +4,13 @@
  */
 
 import { z } from 'zod';
+import { getLegacyFulfillment } from '@/app/domain/productFulfillment';
 import type {
   Product,
   Order,
   OrderTimelineEvent,
   ProductCategory,
   ProductType,
-  DeliverySpeed,
   OrderStatus,
   GameCategory,
   ProductTypeEntity,
@@ -26,26 +26,36 @@ export const DenominationSchema = z.object({
   amount: z.number(),
   currency: z.string(),
   price: z.number(),
+  label: z.string().optional(),
+  optionId: z.string().optional(),
   discount: z.number().optional(),
   bonus: z.string().optional(),
+});
+
+const ProductFulfillmentSchema = z.object({
+  type: z.enum(['activation-code', 'account-top-up']),
+  channel: z.enum(['protected-order-page', 'target-account']),
+  estimate: z.enum(['instant', 'up-to-3-minutes', 'up-to-10-minutes', 'manual-review']),
 });
 
 /**
  * Product schema
  */
-export const ProductSchema: z.ZodType<Product> = z.object({
+const ProductShapeSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
   category: z.enum(['games', 'wallet', 'services', 'subscriptions']) as z.ZodType<ProductCategory>,
   type: z.enum(['top-up', 'voucher', 'gift-card']) as z.ZodType<ProductType>,
   logo: z.string(),
+  image: z.string().optional(),
+  productPageImage: z.string().optional(),
+  gallery: z.array(z.string()).optional(),
   description: z.string(),
   regions: z.array(z.string()).optional(),
   servers: z.array(z.string()).optional(),
   denominations: z.array(DenominationSchema),
-  deliverySpeed: z.enum(['instant', 'fast', 'manual']) as z.ZodType<DeliverySpeed>,
-  deliveryTimeText: z.string(),
+  fulfillment: ProductFulfillmentSchema,
   instructions: z.string().optional(),
   warnings: z.array(z.string()).optional(),
   popular: z.boolean().optional(),
@@ -59,7 +69,23 @@ export const ProductSchema: z.ZodType<Product> = z.object({
   sellerId: z.string().optional(),
   rating: z.number().min(0).max(5).optional(),
   reviewsCount: z.number().int().nonnegative().optional(),
+  optionLabel: z.string().optional(),
+  options: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    description: z.string().optional(),
+  })).optional(),
 });
+
+export const ProductSchema: z.ZodType<Product> = z.preprocess((value) => {
+  if (!value || typeof value !== 'object' || 'fulfillment' in value) return value;
+  const legacy = value as Record<string, unknown>;
+
+  return {
+    ...legacy,
+    fulfillment: getLegacyFulfillment(legacy.type, legacy.deliverySpeed, legacy.deliveryTimeText),
+  };
+}, ProductShapeSchema) as z.ZodType<Product>;
 
 export const GameCategorySchema: z.ZodType<GameCategory> = z.object({
   id: z.string(),
@@ -107,6 +133,11 @@ export const OrderSchema: z.ZodType<Order> = z.object({
   id: z.string(),
   productId: z.string(),
   productName: z.string(),
+  denominationId: z.string().optional(),
+  denominationLabel: z.string().optional(),
+  optionId: z.string().optional(),
+  optionLabel: z.string().optional(),
+  optionValue: z.string().optional(),
   amount: z.number(),
   price: z.number(),
   commission: z.number(),

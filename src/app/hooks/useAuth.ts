@@ -10,10 +10,22 @@ export function useAuth() {
   const store = useAuthStore();
 
   useEffect(() => {
-    if (!store.isAuthenticated && !store.isLoading && store.tokens) {
-      store.checkAuth();
-    }
-  }, [store]);
+    const restoreSession = (state = useAuthStore.getState()) => {
+      if (state.tokens && !state.isAuthenticated) {
+        void state.checkAuth();
+        return;
+      }
+
+      if (!state.tokens) {
+        useAuthStore.setState({ isLoading: false });
+      }
+    };
+
+    const unsubscribe = useAuthStore.persist.onFinishHydration(restoreSession);
+    if (useAuthStore.persist.hasHydrated()) restoreSession();
+
+    return unsubscribe;
+  }, []);
 
   return {
     user: store.user,

@@ -69,7 +69,9 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isAdmin: false,
       isSupport: false,
-      isLoading: false,
+      // Keep protected routes in a neutral loading state until persisted auth
+      // data has been restored and verified.
+      isLoading: true,
       error: null,
 
       login: async (email: string, password: string) => {

@@ -29,8 +29,7 @@ describe('productsService', () => {
         logo: '',
         description: 'Test',
         denominations: [],
-        deliverySpeed: 'instant',
-        deliveryTimeText: 'Моментально',
+        fulfillment: { type: 'account-top-up', channel: 'target-account', estimate: 'instant' },
       },
     ];
 
@@ -52,8 +51,7 @@ describe('productsService', () => {
       logo: '',
       description: 'Test',
       denominations: [],
-      deliverySpeed: 'instant',
-      deliveryTimeText: 'Моментально',
+      fulfillment: { type: 'account-top-up', channel: 'target-account', estimate: 'instant' },
     };
 
     vi.mocked(mockProductsService.getProductBySlug).mockResolvedValue(mockProduct);

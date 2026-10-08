@@ -12,7 +12,7 @@ const COMMISSION_PERCENT = config.gatewayCommissionPercent;
 
 /**
  * Calculate order total with commission
- * 
+ *
  * @param basePrice - Base price of the product/denomination
  * @param commissionPercent - Commission percentage (default: 10%)
  * @returns Calculation result with base price, commission, and total
@@ -34,7 +34,7 @@ export function calculateOrderTotal(
 
 /**
  * Calculate commission from total amount
- * 
+ *
  * @param total - Total amount including commission
  * @param commissionPercent - Commission percentage (default: 10%)
  * @returns Commission amount
@@ -53,7 +53,7 @@ export function calculateCommissionFromTotal(
 
 /**
  * Format price for display
- * 
+ *
  * @param amount - Amount to format
  * @param currency - Currency code (default: 'RUB')
  * @returns Formatted price string
@@ -107,13 +107,27 @@ const CUSTOM_AMOUNT_MAX = 999_999;
 
 /** Лимиты своей суммы: от 10 ₽ до 999 999 ₽. В UI показываем только минимум. */
 export function getCustomAmountLimits(_product?: Product): { min: number; max: number } {
+  if (_product?.slug === 'telegram-stars' && _product.denominations.length) {
+    return {
+      min: Math.min(..._product.denominations.map((denomination) => denomination.amount)),
+      max: CUSTOM_AMOUNT_MAX,
+    };
+  }
+
   return { min: CUSTOM_AMOUNT_MIN, max: CUSTOM_AMOUNT_MAX };
 }
 
-/** Compute price (₽) for custom top-up amount using product's min price-per-unit rate. */
+/** Compute a custom top-up price from the product's published offers. */
 export function computeCustomPrice(amount: number, product: Product): number {
   const denoms = product.denominations;
   if (!denoms.length) return amount;
-  const rate = Math.min(...denoms.map((d) => d.price / d.amount));
+
+  const exactDenomination = denoms.find((denomination) => denomination.amount === amount);
+  if (exactDenomination) return exactDenomination.price;
+
+  const baseDenomination = denoms.reduce((smallest, denomination) =>
+    denomination.amount < smallest.amount ? denomination : smallest
+  );
+  const rate = baseDenomination.price / baseDenomination.amount;
   return Math.round(amount * rate);
 }

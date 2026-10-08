@@ -544,6 +544,18 @@ export default function OrderStatusPage() {
                     <dt className="text-muted-foreground shrink-0">Товар</dt>
                     <dd className="font-medium text-sm min-w-0 break-words text-right">{order.productName}</dd>
                   </div>
+                  {order.optionValue && (
+                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-start">
+                      <dt className="text-muted-foreground shrink-0">{order.optionLabel || 'Вариант'}</dt>
+                      <dd className="text-sm min-w-0 break-words text-right">{order.optionValue}</dd>
+                    </div>
+                  )}
+                  {order.denominationLabel && (
+                    <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-start">
+                      <dt className="text-muted-foreground shrink-0">Выбранная сумма</dt>
+                      <dd className="text-sm min-w-0 break-words text-right">{order.denominationLabel}</dd>
+                    </div>
+                  )}
                   <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-center">
                     <dt className="text-muted-foreground shrink-0">Статус</dt>
                     <dd className="min-w-0 flex justify-end">

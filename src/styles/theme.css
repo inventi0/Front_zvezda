@@ -142,7 +142,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply m-0 bg-background p-0 text-foreground;
   }
 
   html {

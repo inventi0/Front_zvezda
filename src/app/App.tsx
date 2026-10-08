@@ -25,6 +25,7 @@ const AdminDashboard = lazy(() => import('@/app/pages/admin/Dashboard'));
 const AdminOrders = lazy(() => import('@/app/pages/admin/Orders'));
 const AdminOrderDetail = lazy(() => import('@/app/pages/admin/OrderDetail'));
 const AdminProducts = lazy(() => import('@/app/pages/admin/Products'));
+const AdminProductEditor = lazy(() => import('@/app/pages/admin/ProductEditor'));
 const AdminPricing = lazy(() => import('@/app/pages/admin/Pricing'));
 const AdminSupport = lazy(() => import('@/app/pages/admin/Support'));
 
@@ -37,7 +38,7 @@ const LoadingFallback = () => (
 
 function AdminEntryRedirect() {
   const { isSupport } = useAuth();
-  return <Navigate to={isSupport ? '/admin/support' : '/admin/dashboard'} replace />;
+  return <Navigate to={isSupport ? '/admin/support' : '/admin/products'} replace />;
 }
 
 function AppContent() {
@@ -98,6 +99,14 @@ function AppContent() {
             element={
               <ProtectedRoute requireAdmin>
                 <AdminProducts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/products/:productId"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminProductEditor />
               </ProtectedRoute>
             }
           />

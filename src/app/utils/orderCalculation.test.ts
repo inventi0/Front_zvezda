@@ -2,9 +2,27 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateOrderTotal,
   calculateCommissionFromTotal,
+  computeCustomPrice,
   formatPrice,
+  getCustomAmountLimits,
   sellerIncomeCalculator,
 } from './orderCalculation';
+import type { Product } from '@/app/types';
+
+const telegramStarsProduct = {
+  id: 'telegram-stars',
+  name: 'Telegram Stars',
+  slug: 'telegram-stars',
+  category: 'services',
+  type: 'top-up',
+  logo: '',
+  description: '',
+  denominations: [
+    { id: 'stars-100', amount: 100, currency: 'Stars', price: 199 },
+    { id: 'stars-500', amount: 500, currency: 'Stars', price: 899 },
+  ],
+  fulfillment: { type: 'account-top-up', channel: 'target-account', estimate: 'instant' },
+} satisfies Product;
 
 describe('orderCalculation', () => {
   describe('calculateOrderTotal', () => {
@@ -76,6 +94,20 @@ describe('orderCalculation', () => {
       expect(r.sellerIncome).toBe(1000);
       expect(r.commission).toBe(150);
       expect(r.buyerTotal).toBe(1150);
+    });
+  });
+
+  describe('custom amount pricing', () => {
+    it('uses the smallest published Stars package as the minimum', () => {
+      expect(getCustomAmountLimits(telegramStarsProduct).min).toBe(100);
+    });
+
+    it('keeps an exact package price when the amount matches a published offer', () => {
+      expect(computeCustomPrice(500, telegramStarsProduct)).toBe(899);
+    });
+
+    it('prices another Stars amount from the base package rate', () => {
+      expect(computeCustomPrice(250, telegramStarsProduct)).toBe(498);
     });
   });
 });

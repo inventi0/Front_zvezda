@@ -8,6 +8,7 @@ import { productsService } from '@/app/services';
 import type { Product } from '@/app/types';
 import { ApiClientError } from '@/app/api/client';
 import { logger } from '@/app/utils/logger';
+import { CATALOG_STORAGE_KEY, CATALOG_UPDATED_EVENT } from '@/app/admin/catalogEvents';
 
 interface UseProductsOptions {
   category?: string;
@@ -63,6 +64,19 @@ export function useProducts(options: UseProductsOptions = {}): UseProductsResult
     fetchProducts();
   }, [fetchProducts]);
 
+  useEffect(() => {
+    const refresh = () => { void fetchProducts(); };
+    const refreshFromStorage = (event: StorageEvent) => {
+      if (event.key === CATALOG_STORAGE_KEY) refresh();
+    };
+    window.addEventListener(CATALOG_UPDATED_EVENT, refresh);
+    window.addEventListener('storage', refreshFromStorage);
+    return () => {
+      window.removeEventListener(CATALOG_UPDATED_EVENT, refresh);
+      window.removeEventListener('storage', refreshFromStorage);
+    };
+  }, [fetchProducts]);
+
   return {
     products,
     loading,
@@ -112,6 +126,19 @@ export function useProduct(slug: string | undefined): UseProductResult {
 
   useEffect(() => {
     fetchProduct();
+  }, [fetchProduct]);
+
+  useEffect(() => {
+    const refresh = () => { void fetchProduct(); };
+    const refreshFromStorage = (event: StorageEvent) => {
+      if (event.key === CATALOG_STORAGE_KEY) refresh();
+    };
+    window.addEventListener(CATALOG_UPDATED_EVENT, refresh);
+    window.addEventListener('storage', refreshFromStorage);
+    return () => {
+      window.removeEventListener(CATALOG_UPDATED_EVENT, refresh);
+      window.removeEventListener('storage', refreshFromStorage);
+    };
   }, [fetchProduct]);
 
   return {

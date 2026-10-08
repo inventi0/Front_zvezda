@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Mail, MessageCircle } from 'lucide-react';
-import logoImage from '@/app/assets/icons/Лого-Звезда.svg?url';
+import logoImage from '@/app/assets/icons/zvezda-brand.png';
 
 export default function Footer() {
   return (
@@ -9,13 +9,12 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8">
           {/* About */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
+            <div className="mb-4">
               <img 
                 src={logoImage} 
                 alt="Звезда"
-                className="h-9 w-9 object-contain"
+                className="block h-auto w-36"
               />
-              <span className="font-bold text-xl">Звезда</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Быстрое и безопасное пополнение игровых валют, подарочных карт и подписок.

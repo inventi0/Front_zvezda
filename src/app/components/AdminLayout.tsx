@@ -2,36 +2,46 @@ import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/app/components/ui/button';
 import { cn } from '@/app/components/ui/utils';
-import { Home, LayoutDashboard, ShoppingCart, Package, TrendingUp, Menu } from 'lucide-react';
+import { Home, LayoutDashboard, ShoppingCart, Package, TrendingUp, Menu, MessageCircle } from 'lucide-react';
+import { useAuth } from '@/app/hooks/useAuth';
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
 } from '@/app/components/ui/sheet';
-import logoImage from '@/app/assets/icons/Лого-Звезда.svg?url';
+import logoImage from '@/app/assets/icons/zvezda-brand.png';
 
 interface AdminLayoutProps {
   children: ReactNode;
   title: string;
   description?: string;
   actions?: ReactNode;
+  headerAside?: ReactNode;
+  headerContent?: ReactNode;
 }
 
-export default function AdminLayout({ children, title, description, actions }: AdminLayoutProps) {
+export default function AdminLayout({ children, title, description, actions, headerAside, headerContent }: AdminLayoutProps) {
   const location = useLocation();
+  const { isAdmin, isSupport } = useAuth();
+  const adminHome = isSupport && !isAdmin ? '/admin/support' : '/admin/products';
 
   const navigation = [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { name: 'Заказы', href: '/admin/orders', icon: ShoppingCart },
-    { name: 'Товары', href: '/admin/products', icon: Package },
-    { name: 'Цены', href: '/admin/pricing', icon: TrendingUp },
+    ...(isAdmin ? [
+      { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+      { name: 'Заказы', href: '/admin/orders', icon: ShoppingCart },
+      { name: 'Товары', href: '/admin/products', icon: Package },
+      { name: 'Цены', href: '/admin/pricing', icon: TrendingUp },
+    ] : []),
+    ...(isAdmin || isSupport ? [
+      { name: 'Поддержка', href: '/admin/support', icon: MessageCircle },
+    ] : []),
   ];
 
   const NavItems = ({ mobile = false }: { mobile?: boolean }) => (
     <>
       {navigation.map((item) => {
         const Icon = item.icon;
-        const isActive = location.pathname === item.href;
+        const isActive = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
         return (
           <Link
             key={item.name}
@@ -77,18 +87,15 @@ export default function AdminLayout({ children, title, description, actions }: A
                 <SheetContent side="left" className="w-[300px] sm:w-[320px] p-0 flex flex-col">
                   <div className="px-6 pt-6 pb-4 border-b border-border">
                     <Link 
-                      to="/admin/dashboard" 
-                      className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                      to={adminHome}
+                      className="flex flex-col items-start gap-1 transition-opacity hover:opacity-80"
                     >
                       <img
                         src={logoImage}
                         alt="Звезда"
-                        className="h-11 w-11 object-contain"
+                        className="block h-auto w-40"
                       />
-                      <div>
-                        <div className="font-bold text-2xl tracking-tight">Звезда</div>
-                        <div className="text-xs text-muted-foreground">Админ-панель</div>
-                      </div>
+                      <div className="text-xs text-muted-foreground">Админ-панель</div>
                     </Link>
                   </div>
                   <nav className="flex-1 px-6 py-6 overflow-y-auto">
@@ -111,16 +118,13 @@ export default function AdminLayout({ children, title, description, actions }: A
               </Sheet>
 
               {/* Logo */}
-              <Link to="/admin/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <Link to={adminHome} className="hidden flex-col items-start gap-0.5 transition-opacity hover:opacity-80 sm:flex">
                 <img
                   src={logoImage}
                   alt="Звезда"
-                  className="h-10 w-10 object-contain"
+                  className="block h-auto w-32"
                 />
-                <div className="hidden sm:block">
-                  <div className="font-bold text-2xl tracking-tight">Звезда</div>
-                  <div className="text-xs text-muted-foreground">Админ-панель</div>
-                </div>
+                <div className="text-xs text-muted-foreground">Админ-панель</div>
               </Link>
             </div>
 
@@ -139,21 +143,25 @@ export default function AdminLayout({ children, title, description, actions }: A
 
       <div className="flex">
         {/* Sidebar - Desktop */}
-        <aside className="hidden lg:block w-64 border-r border-border bg-card/50">
+        <aside className="hidden w-64 shrink-0 border-r border-border bg-card/50 lg:block">
           <nav className="sticky top-24 p-5 space-y-3">
             <NavItems />
           </nav>
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-9">
+        <main className="min-w-0 flex-1">
+          <div className="container mx-auto min-w-0 px-4 py-9 sm:px-6 lg:px-8">
             {/* Page Header */}
-            <div className="mb-9">
-              <h1 className="text-3xl md:text-4xl font-bold mb-2 tracking-tight">{title}</h1>
-              {description && (
-                <p className="text-muted-foreground">{description}</p>
-              )}
+            <div className={cn('mb-9', headerAside && 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(440px,0.8fr)] xl:items-start')}>
+              <div className="min-w-0">
+                <h1 className="text-3xl md:text-4xl font-bold mb-2 tracking-tight">{title}</h1>
+                {description && (
+                  <p className="text-muted-foreground">{description}</p>
+                )}
+                {headerContent}
+              </div>
+              {headerAside}
             </div>
 
             {children}

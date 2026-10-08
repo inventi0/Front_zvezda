@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import AdminLayout from '@/app/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
@@ -38,50 +39,34 @@ export default function AdminOrderDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
+      <AdminLayout title="Заказ" description="Загрузка данных заказа…">
+        <div className="py-20 text-center">
           <p className="text-muted-foreground">Загрузка заказа...</p>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 
   if (!order || error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Заказ не найден</h1>
+      <AdminLayout title="Заказ не найден" description="Запрошенная карточка заказа недоступна.">
+        <div className="py-20 text-center">
           <p className="text-muted-foreground mb-4">{error || 'Заказ не существует'}</p>
-          <Link to="/admin/orders">
-            <Button>Вернуться к заказам</Button>
-          </Link>
+          <Button asChild><Link to="/admin/orders">Вернуться к заказам</Link></Button>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link to="/admin/orders">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Заказ {order.id}</h1>
-              <p className="text-sm text-muted-foreground">{order.productName}</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-3 gap-6">
+    <AdminLayout
+      title={`Заказ ${order.id}`}
+      description={order.productName}
+      actions={<Button asChild variant="outline" size="sm"><Link to="/admin/orders"><ArrowLeft className="mr-2 h-4 w-4" />К заказам</Link></Button>}
+    >
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_320px]">
           {/* Main Info */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="min-w-0 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Детали заказа</CardTitle>
@@ -107,6 +92,18 @@ export default function AdminOrderDetail() {
                     <div className="text-sm text-muted-foreground mb-1">Товар</div>
                     <div>{order.productName}</div>
                   </div>
+                  {order.optionValue && (
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">{order.optionLabel || 'Вариант'}</div>
+                      <div>{order.optionValue}</div>
+                    </div>
+                  )}
+                  {order.denominationLabel && (
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Номинал / SKU</div>
+                      <div>{order.denominationLabel}</div>
+                    </div>
+                  )}
                   <div>
                     <div className="text-sm text-muted-foreground mb-1">Сумма</div>
                     <div className="font-mono">{order.total} ₽</div>
@@ -190,7 +187,7 @@ export default function AdminOrderDetail() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <Button 
-                  className="w-full"
+                  className="w-full px-3 text-sm"
                   onClick={() => toast.success('Заказ отправлен на повторное выполнение')}
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
@@ -198,7 +195,7 @@ export default function AdminOrderDetail() {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="w-full"
+                  className="w-full px-3 text-sm"
                   onClick={() => toast.success('Заказ отмечен как выполненный')}
                 >
                   <CheckCircle className="mr-2 h-4 w-4" />
@@ -227,7 +224,6 @@ export default function AdminOrderDetail() {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </AdminLayout>
   );
 }

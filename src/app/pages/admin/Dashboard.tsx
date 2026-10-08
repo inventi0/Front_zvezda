@@ -3,11 +3,12 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { Package, ShoppingCart, Clock, AlertCircle, CheckCircle, DollarSign, MessageCircle, TrendingUp } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, MessageCircle, TrendingUp } from 'lucide-react';
 import { adminOrdersService } from '@/app/services';
 import { useProducts } from '@/app/hooks/useProducts';
 import { logger } from '@/app/utils/logger';
 import { DemoModeIndicator } from '@/app/components/DemoModeIndicator';
+import AdminLayout from '@/app/components/AdminLayout';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import type { AdminStats, Order } from '@/app/types';
 
@@ -74,27 +75,11 @@ export default function AdminDashboard() {
   }, [stats, products]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold">Админ-панель Звезда</h1>
-                <DemoModeIndicator />
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Управление платформой цифровых пополнений
-              </p>
-            </div>
-            <Link to="/">
-              <Button variant="outline">Вернуться на сайт</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AdminLayout
+      title="Дашборд"
+      description="Сводка заказов, выручки и операционных состояний магазина."
+      actions={<DemoModeIndicator />}
+    >
         {loading ? (
           <div className="text-center py-16">
             <p className="text-muted-foreground">Загрузка данных...</p>
@@ -115,106 +100,26 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {/* Quick Stats */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Всего заказов
-              </CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{totalOrders}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                +{stats.todayOrders} сегодня
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Общая выручка
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{(stats.totalRevenue / 1000).toFixed(1)}K ₽</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                +{(stats.todayRevenue / 1000).toFixed(1)}K сегодня
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Успешных
-              </CardTitle>
-              <CheckCircle className="h-4 w-4 text-success" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-success">{successOrders}</div>
-              <p className="text-xs text-muted-foreground mt-1">{stats.successRate}% от всех</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Средний чек
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stats.averageOrderValue} ₽</div>
-              <p className="text-xs text-muted-foreground mt-1">За заказ</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Status Cards */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                В обработке
-              </CardTitle>
-              <Clock className="h-4 w-4 text-warning" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-warning">{pendingOrders}</div>
-              <p className="text-xs text-muted-foreground mt-1">Требуют внимания</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Ошибки
-              </CardTitle>
-              <AlertCircle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-destructive">{failedOrders}</div>
-              <p className="text-xs text-muted-foreground mt-1">Требуют проверки</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Товаров
-              </CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{products.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">В каталоге</p>
-            </CardContent>
-          </Card>
-        </div>
+            {/* Compact operational summary */}
+            <Card className="mb-8 gap-0 overflow-hidden">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+                {[
+                  { label: 'Всего заказов', value: totalOrders, note: `+${stats.todayOrders} сегодня` },
+                  { label: 'Общая выручка', value: `${(stats.totalRevenue / 1000).toFixed(1)}K ₽`, note: `+${(stats.todayRevenue / 1000).toFixed(1)}K сегодня` },
+                  { label: 'Успешных', value: successOrders, note: `${stats.successRate}% от всех`, tone: 'text-success' },
+                  { label: 'Средний чек', value: `${stats.averageOrderValue} ₽`, note: 'За заказ' },
+                  { label: 'В обработке', value: pendingOrders, note: 'Требуют внимания', tone: 'text-warning' },
+                  { label: 'Ошибки', value: failedOrders, note: 'Требуют проверки', tone: 'text-destructive' },
+                  { label: 'Товаров', value: products.length, note: 'В каталоге' },
+                ].map((item) => (
+                  <div key={item.label} className="border-b p-4 sm:border-r sm:[&:nth-child(2n)]:border-r-0 lg:[&:nth-child(2n)]:border-r lg:[&:nth-child(4n)]:border-r-0 xl:border-b-0 xl:[&:nth-child(4n)]:border-r xl:last:border-r-0">
+                    <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+                    <p className={`mt-1 text-2xl font-bold ${item.tone ?? ''}`}>{item.value}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{item.note}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
 
         {/* Charts */}
         <div className="grid lg:grid-cols-2 gap-6 mb-8">
@@ -370,7 +275,6 @@ export default function AdminDashboard() {
         </Card>
           </>
         )}
-      </div>
-    </div>
+    </AdminLayout>
   );
 }

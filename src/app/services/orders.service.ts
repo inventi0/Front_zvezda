@@ -29,6 +29,7 @@ const realOrdersService = {
    * Body: {
    *   productId: "1",
    *   denominationId: "1-1",
+   *   optionId: "region-eu",
    *   email: "user@example.com",
    *   accountId: "steamuser123",
    *   region: "RU",

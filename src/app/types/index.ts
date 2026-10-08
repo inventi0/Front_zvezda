@@ -9,7 +9,15 @@
 
 export type ProductType = 'top-up' | 'voucher' | 'gift-card';
 export type ProductCategory = 'games' | 'wallet' | 'services' | 'subscriptions';
-export type DeliverySpeed = 'instant' | 'fast' | 'manual';
+export type FulfillmentType = 'activation-code' | 'account-top-up';
+export type FulfillmentChannel = 'protected-order-page' | 'target-account';
+export type DeliveryEstimate = 'instant' | 'up-to-3-minutes' | 'up-to-10-minutes' | 'manual-review';
+
+export interface ProductFulfillment {
+  type: FulfillmentType;
+  channel: FulfillmentChannel;
+  estimate: DeliveryEstimate;
+}
 
 /** Category layer: Game/Platform (e.g. Steam, Fortnite). Optional; existing products work without it. */
 export interface GameCategory {
@@ -34,12 +42,14 @@ export interface Product {
   category: ProductCategory;
   type: ProductType;
   logo: string;
+  image?: string;
+  productPageImage?: string;
+  gallery?: string[];
   description: string;
   regions?: string[];
   servers?: string[];
   denominations: Denomination[];
-  deliverySpeed: DeliverySpeed;
-  deliveryTimeText: string;
+  fulfillment: ProductFulfillment;
   instructions?: string;
   warnings?: string[];
   popular?: boolean;
@@ -53,8 +63,16 @@ export interface Product {
   rating?: number;
   /** Optional: number of reviews. Trust layer. */
   reviewsCount?: number;
+  optionLabel?: string;
+  options?: ProductOption[];
   /** Optional: seller id when product is from seller catalog. */
   sellerId?: string;
+}
+
+export interface ProductOption {
+  id: string;
+  label: string;
+  description?: string;
 }
 
 export interface Denomination {
@@ -62,6 +80,8 @@ export interface Denomination {
   amount: number;
   currency: string;
   price: number;
+  label?: string;
+  optionId?: string;
   discount?: number;
   bonus?: string;
 }
@@ -81,6 +101,11 @@ export interface Order {
   id: string;
   productId: string;
   productName: string;
+  denominationId?: string;
+  denominationLabel?: string;
+  optionId?: string;
+  optionLabel?: string;
+  optionValue?: string;
   amount: number;
   price: number;
   commission: number;

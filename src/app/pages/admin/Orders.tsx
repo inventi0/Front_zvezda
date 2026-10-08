@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import AdminLayout from '@/app/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
@@ -19,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/app/components/ui/table';
-import { Search, Filter, ArrowLeft } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import { adminOrdersService } from '@/app/services';
 import { logger } from '@/app/utils/logger';
 import type { Order, OrderStatus } from '@/app/types';
@@ -63,50 +64,35 @@ export default function AdminOrders() {
   }, [orders, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link to="/admin/dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <h1 className="text-2xl font-bold">Управление заказами</h1>
+    <AdminLayout
+      title="Заказы"
+      description="Поиск, контроль статусов и переход к операционной карточке заказа."
+    >
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Поиск по номеру, email, товару..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
           </div>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | 'all')}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <Filter className="mr-2 h-4 w-4" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все статусы</SelectItem>
+              <SelectItem value="success">Успешные</SelectItem>
+              <SelectItem value="pending">В обработке</SelectItem>
+              <SelectItem value="failed">Ошибки</SelectItem>
+              <SelectItem value="manual_review">Ручная проверка</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8">
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Поиск по номеру, email, товару..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | 'all')}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все статусы</SelectItem>
-                  <SelectItem value="success">Успешные</SelectItem>
-                  <SelectItem value="pending">В обработке</SelectItem>
-                  <SelectItem value="failed">Ошибки</SelectItem>
-                  <SelectItem value="manual_review">Ручная проверка</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>
@@ -179,7 +165,6 @@ export default function AdminOrders() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </AdminLayout>
   );
 }

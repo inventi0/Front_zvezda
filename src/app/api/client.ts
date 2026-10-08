@@ -184,15 +184,13 @@ class ApiClient {
     const url = this.buildUrl(path);
 
     // Default headers
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...fetchOptions.headers,
-    };
+    const headers = new Headers(fetchOptions.headers);
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
     // Add auth token if available (for future use)
     const token = this.getAuthToken();
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers.set('Authorization', `Bearer ${token}`);
     }
 
     try {

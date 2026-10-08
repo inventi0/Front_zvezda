@@ -5,10 +5,23 @@
  */
 
 import { config } from '@/app/config/env';
-import { mockProducts, mockOrders, getProductById, getProductBySlug, getOrderById, getMockAdminStats } from './mockData';
+import { mockProducts, mockOrders, getOrderById, getMockAdminStats } from './mockData';
+import { getPublishedStorefrontProducts } from '@/app/admin/storefrontCatalog';
 import { calculateOrderTotal } from '@/app/utils/orderCalculation';
+import { getCustomerOptionCopy, resolveProductSelection } from '@/app/domain/productSelection';
 import type { Product, Order, User, AuthTokens, AdminStats } from '@/app/types';
-import type { GetProductsRequest, CreateOrderRequest, CreateOrderResponse, LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, RefreshTokenResponse, GetAdminOrdersRequest, UpdateOrderStatusRequest } from '@/app/types/api';
+import type {
+  GetProductsRequest,
+  CreateOrderRequest,
+  CreateOrderResponse,
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  RegisterResponse,
+  RefreshTokenResponse,
+  GetAdminOrdersRequest,
+  UpdateOrderStatusRequest,
+} from '@/app/types/api';
 
 /**
  * Check if mock data should be used
@@ -17,9 +30,21 @@ export const isMockMode = (): boolean => {
   return config.enableMockData;
 };
 
+function getStorefrontProducts(): Product[] {
+  return [...mockProducts, ...getPublishedStorefrontProducts()];
+}
+
+function findStorefrontProductById(id: string): Product | undefined {
+  return getStorefrontProducts().find((product) => product.id === id);
+}
+
+function findStorefrontProductBySlug(slug: string): Product | undefined {
+  return getStorefrontProducts().find((product) => product.slug === slug);
+}
+
 /** Resolve product by id (platform catalog only). */
 export function getProductByIdUnified(id: string): Product | undefined {
-  return getProductById(id);
+  return findStorefrontProductById(id);
 }
 
 /**
@@ -27,21 +52,22 @@ export function getProductByIdUnified(id: string): Product | undefined {
  */
 export const mockProductsService = {
   async getProducts(params?: GetProductsRequest): Promise<Product[]> {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
-    let products: Product[] = [...mockProducts];
+    let products = getStorefrontProducts();
 
     if (params?.category) {
-      products = products.filter(p => p.category === params.category);
+      products = products.filter((p) => p.category === params.category);
     }
     if (params?.popular) {
-      products = products.filter(p => p.popular === true);
+      products = products.filter((p) => p.popular === true);
     }
     if (params?.search) {
       const searchLower = params.search.toLowerCase();
-      products = products.filter(p =>
-        p.name.toLowerCase().includes(searchLower) ||
-        (p.description ?? '').toLowerCase().includes(searchLower)
+      products = products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(searchLower) ||
+          (p.description ?? '').toLowerCase().includes(searchLower)
       );
     }
 
@@ -49,15 +75,15 @@ export const mockProductsService = {
   },
 
   async getProductBySlug(slug: string): Promise<Product> {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    const product = getProductBySlug(slug);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const product = findStorefrontProductBySlug(slug);
     if (!product) throw new Error(`Product with slug "${slug}" not found`);
     return product;
   },
 
   async getProductById(id: string): Promise<Product> {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    const product = getProductById(id);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const product = findStorefrontProductById(id);
     if (!product) throw new Error(`Product with id "${id}" not found`);
     return product;
   },
@@ -68,21 +94,37 @@ export const mockProductsService = {
  */
 export const mockOrdersService = {
   async createOrder(data: CreateOrderRequest): Promise<CreateOrderResponse> {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const product = getProductById(data.productId);
+    const product = findStorefrontProductById(data.productId);
     if (!product) throw new Error(`Product with id "${data.productId}" not found`);
 
     let amount: number;
     let basePrice: number;
-    if (data.denominationId === 'custom' && typeof data.customAmount === 'number' && typeof data.customPrice === 'number') {
+    let denominationId: string | undefined;
+    let denominationLabel: string | undefined;
+    let optionId: string | undefined;
+    let optionLabel: string | undefined;
+    let optionValue: string | undefined;
+    if (
+      data.denominationId === 'custom' &&
+      typeof data.customAmount === 'number' &&
+      typeof data.customPrice === 'number'
+    ) {
       amount = data.customAmount;
       basePrice = data.customPrice;
+      denominationId = 'custom';
+      denominationLabel = `${data.customAmount} ${product.denominations[0]?.currency ?? 'RUB'}`;
     } else {
-      const denomination = product.denominations.find(d => d.id === data.denominationId);
-      if (!denomination) throw new Error(`Denomination with id "${data.denominationId}" not found`);
+      const selection = resolveProductSelection(product, data.optionId, data.denominationId);
+      const { denomination, option } = selection;
       amount = denomination.amount;
       basePrice = denomination.price;
+      denominationId = denomination.id;
+      denominationLabel = denomination.label || `${denomination.amount} ${denomination.currency}`;
+      optionId = option?.id;
+      optionLabel = option ? getCustomerOptionCopy(product.optionLabel).label : undefined;
+      optionValue = option?.label;
     }
 
     const { commission, total } = calculateOrderTotal(basePrice, config.gatewayCommissionPercent);
@@ -92,6 +134,11 @@ export const mockOrdersService = {
       id: orderId,
       productId: data.productId,
       productName: product.name,
+      denominationId,
+      denominationLabel,
+      optionId,
+      optionLabel,
+      optionValue,
       amount,
       price: basePrice,
       commission,
@@ -105,7 +152,9 @@ export const mockOrdersService = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       paymentMethod: data.paymentMethod,
-      timeline: [{ timestamp: new Date().toISOString(), status: 'created', message: 'Заказ создан' }],
+      timeline: [
+        { timestamp: new Date().toISOString(), status: 'created', message: 'Заказ создан' },
+      ],
     };
 
     mockOrders.push(order);
@@ -118,20 +167,23 @@ export const mockOrdersService = {
   },
 
   async getOrder(orderId: string): Promise<Order> {
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const order = getOrderById(orderId);
     if (!order) throw new Error(`Order with id "${orderId}" not found`);
     return order;
   },
 
   async getUserOrders(): Promise<Order[]> {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     let userEmail: string | undefined;
     try {
       const authRaw = localStorage.getItem('auth-storage');
       if (authRaw) {
-        const parsed = JSON.parse(authRaw) as { state?: { user?: { email?: string } }; user?: { email?: string } };
+        const parsed = JSON.parse(authRaw) as {
+          state?: { user?: { email?: string } };
+          user?: { email?: string };
+        };
         userEmail = parsed?.state?.user?.email ?? parsed?.user?.email;
       }
     } catch {
@@ -148,8 +200,12 @@ export const mockOrdersService = {
  * Mock Payment Service
  */
 export const mockPaymentService = {
-  async initiatePayment(data: { orderId: string; paymentMethod: 'card' | 'sbp'; returnUrl: string }) {
-    await new Promise(resolve => setTimeout(resolve, 300));
+  async initiatePayment(data: {
+    orderId: string;
+    paymentMethod: 'card' | 'sbp';
+    returnUrl: string;
+  }) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
     return {
       paymentId: `PAY-${data.orderId}`,
       paymentUrl: `https://payment.zvezda.ru/pay/${data.orderId}`,
@@ -158,7 +214,7 @@ export const mockPaymentService = {
   },
 
   async checkPaymentStatus(paymentId: string) {
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     // In mock mode, simulate pending status
     return {
       status: 'pending' as const,
@@ -196,7 +252,7 @@ const mockUsers: User[] = [
 
 export const mockAuthService = {
   async login(data: LoginRequest): Promise<LoginResponse> {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Mock validation
     if (data.email === 'admin@zvezda.ru' && data.password === 'admin123') {
@@ -233,7 +289,7 @@ export const mockAuthService = {
   },
 
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     if (data.password !== data.confirmPassword) {
       throw new Error('Пароли не совпадают');
@@ -263,11 +319,11 @@ export const mockAuthService = {
   },
 
   async refreshToken(refreshToken: string): Promise<RefreshTokenResponse> {
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     // Extract user ID from token (in real app, backend would validate)
     const userId = refreshToken.replace('mock-refresh-token-', '');
-    const user = mockUsers.find(u => u.id === userId);
+    const user = mockUsers.find((u) => u.id === userId);
 
     if (!user) {
       throw new Error('Invalid refresh token');
@@ -283,18 +339,18 @@ export const mockAuthService = {
   },
 
   async logout(): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   },
 
   async getCurrentUser(): Promise<User> {
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     try {
       const raw = localStorage.getItem('auth_tokens');
       if (raw) {
         const parsed = JSON.parse(raw) as { accessToken?: string };
         const accessToken = parsed?.accessToken;
         const id = accessToken?.replace(/^mock-access-token-/, '');
-        const user = id ? mockUsers.find((u) => u.id === id) ?? null : null;
+        const user = id ? (mockUsers.find((u) => u.id === id) ?? null) : null;
         if (user) return user;
       }
     } catch {
@@ -314,29 +370,29 @@ export const mockAdminOrdersService = {
     page: number;
     limit: number;
   }> {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     let filteredOrders = [...mockOrders];
 
     // Apply filters
     if (params?.status) {
-      filteredOrders = filteredOrders.filter(o => o.status === params.status);
+      filteredOrders = filteredOrders.filter((o) => o.status === params.status);
     }
     if (params?.productId) {
-      filteredOrders = filteredOrders.filter(o => o.productId === params.productId);
+      filteredOrders = filteredOrders.filter((o) => o.productId === params.productId);
     }
     if (params?.email) {
-      filteredOrders = filteredOrders.filter(o => 
+      filteredOrders = filteredOrders.filter((o) =>
         o.email.toLowerCase().includes(params.email!.toLowerCase())
       );
     }
     if (params?.dateFrom) {
       const dateFrom = new Date(params.dateFrom);
-      filteredOrders = filteredOrders.filter(o => new Date(o.createdAt) >= dateFrom);
+      filteredOrders = filteredOrders.filter((o) => new Date(o.createdAt) >= dateFrom);
     }
     if (params?.dateTo) {
       const dateTo = new Date(params.dateTo);
-      filteredOrders = filteredOrders.filter(o => new Date(o.createdAt) <= dateTo);
+      filteredOrders = filteredOrders.filter((o) => new Date(o.createdAt) <= dateTo);
     }
 
     // Sort
@@ -380,7 +436,7 @@ export const mockAdminOrdersService = {
   },
 
   async getOrder(orderId: string): Promise<Order> {
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const order = getOrderById(orderId);
     if (!order) {
       throw new Error(`Order with id "${orderId}" not found`);
@@ -389,7 +445,7 @@ export const mockAdminOrdersService = {
   },
 
   async updateOrderStatus(orderId: string, data: UpdateOrderStatusRequest): Promise<Order> {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
     const order = getOrderById(orderId);
     if (!order) {
       throw new Error(`Order with id "${orderId}" not found`);
@@ -397,13 +453,16 @@ export const mockAdminOrdersService = {
 
     // Update order in mock data
     order.status = data.status;
-    order.statusText = 
-      data.status === 'success' ? 'Выполнен' :
-      data.status === 'pending' ? 'В обработке' :
-      data.status === 'failed' ? 'Ошибка выполнения' :
-      'Ручная проверка';
+    order.statusText =
+      data.status === 'success'
+        ? 'Выполнен'
+        : data.status === 'pending'
+          ? 'В обработке'
+          : data.status === 'failed'
+            ? 'Ошибка выполнения'
+            : 'Ручная проверка';
     order.updatedAt = new Date().toISOString();
-    
+
     if (data.voucherCode) {
       order.voucherCode = data.voucherCode;
     }
@@ -412,7 +471,7 @@ export const mockAdminOrdersService = {
   },
 
   async retryFulfillment(orderId: string): Promise<Order> {
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     const order = getOrderById(orderId);
     if (!order) {
       throw new Error(`Order with id "${orderId}" not found`);
@@ -427,7 +486,7 @@ export const mockAdminOrdersService = {
   },
 
   async getStats(): Promise<AdminStats> {
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     return getMockAdminStats();
   },
 };
